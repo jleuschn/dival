@@ -135,7 +135,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'DeepInversionValidationLibrary.tex', 'Deep Inversion Validation Library Documentation',
+    (master_doc, 'DeepInversionValidationLibrary.tex',
+     'Deep Inversion Validation Library Documentation',
      'Hannes Albers, Johannes Leuschner, Maximilian Schmidt', 'manual'),
 ]
 
@@ -145,8 +146,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'deepinversionvalidationlibrary', 'Deep Inversion Validation Library Documentation',
-     [author], 1)
+    (master_doc, 'deepinversionvalidationlibrary',
+     'Deep Inversion Validation Library Documentation', [author], 1)
 ]
 
 
@@ -156,8 +157,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'DeepInversionValidationLibrary', 'Deep Inversion Validation Library Documentation',
-     author, 'DeepInversionValidationLibrary', 'One line description of project.',
+    (master_doc, 'DeepInversionValidationLibrary',
+     'Deep Inversion Validation Library Documentation', author,
+     'DeepInversionValidationLibrary', 'One line description of project.',
      'Miscellaneous'),
 ]
 
