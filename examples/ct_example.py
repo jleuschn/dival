@@ -1,7 +1,7 @@
 import numpy as np
 import odl
 from evaluation import EvaluationTaskTable, TestData, L2Measure
-from reconstruction import OperatorReconstructor
+from reconstruction import OperatorReconstructor, CGReconstructor
 
 reco_space = odl.uniform_discr(
     min_pt=[-20, -20], max_pt=[20, 20], shape=[300, 300],
@@ -21,7 +21,10 @@ eval_tt = EvaluationTaskTable()
 
 fbp = odl.tomo.fbp_op(ray_trafo, filter_type='Hann', frequency_scaling=0.8)
 
-reconstructor = OperatorReconstructor(fbp)
-eval_tt.append(test_data, reconstructor, [L2Measure()])
+fbp_reconstructor = OperatorReconstructor(fbp)
+cg_reconstructor = CGReconstructor(ray_trafo, reco_space.zero(), 7)
+eval_tt.append(test_data, fbp_reconstructor, [L2Measure()])
+eval_tt.append(test_data, cg_reconstructor, [L2Measure()])
 results = eval_tt.run()
 results.plot_reconstruction(0)
+results.plot_reconstruction(1)
