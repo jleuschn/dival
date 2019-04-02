@@ -17,9 +17,10 @@ class TestData:
     ground_truth : `Data`
         The ground truth. May be replaced with a good quality reference.
         Reconstructors will be evaluated by comparing their reconstructions
-        with this value.
+        with this value. May also be ``None`` if no evaluation based on
+        ground truth shall be performed.
     """
-    def __init__(self, observation, ground_truth,
+    def __init__(self, observation, ground_truth=None,
                  short_name='', name='', description=''):
         self.observation = observation
         self.ground_truth = ground_truth
@@ -90,7 +91,8 @@ class L2Measure(Measure):
                    'sqrt(sum((reconstruction-ground_truth)**2))')
 
     def apply(self, reconstruction, ground_truth):
-        return np.linalg.norm((reconstruction-ground_truth).flat)
+        return np.linalg.norm((reconstruction.asarray() -
+                               ground_truth.asarray()).flat)
 
 
 class EvaluationTaskTable:
@@ -109,7 +111,7 @@ class EvaluationTaskTable:
             results.reconstructions.append(reconstruction)
             measure_values = []
             for measure in task['measures']:
-                measure_values.append(measure.apply(test_data.observation,
+                measure_values.append(measure.apply(reconstruction,
                                                     test_data.ground_truth))
             results.measure_values.append(measure_values)
         return results
@@ -130,8 +132,8 @@ class EvaluationTaskTable:
                 self.append(test_data_, reconstructor, measures)
 
     def __repr__(self):
-        return "EvaluationTaskTable(name='{}', tasks='{}')".format(
-            self.name, self.tasks.__repr__)
+        return "EvaluationTaskTable(name='{}', tasks={})".format(
+            self.name, self.tasks.__repr__())
 
 
 class EvaluationResultTable:
@@ -150,3 +152,7 @@ class EvaluationResultTable:
             plot_image(self.reconstructions[index])
         else:
             print('only 1d and 2d reconstructions can be plotted (currently)')
+
+    def __repr__(self):
+        return "EvaluationResultTable(reconstructions={}, measure_values={})".\
+            format(self.reconstructions, self.measure_values)
