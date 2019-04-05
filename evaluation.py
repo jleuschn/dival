@@ -153,6 +153,11 @@ class EvaluationResultTable:
         else:
             print('only 1d and 2d reconstructions can be plotted (currently)')
 
+    def plot_all_reconstructions(self):
+        """Plot all reconstructions."""
+        for i in range(len(self.reconstructions)):
+            self.plot_reconstruction(i)
+
     def __repr__(self):
         return "EvaluationResultTable(reconstructions={}, measure_values={})".\
             format(self.reconstructions, self.measure_values)
