@@ -101,14 +101,26 @@ class EvaluationTaskTable:
         self.name = name
         self.tasks = tasks or []
 
-    def run(self):
-        """Run all tasks and return the results."""
+    def run(self, save_reconstructions=True):
+        """Run all tasks and return the results.
+
+        Parameters
+        ----------
+        save_reconstructions : bool, optional
+            Whether the reconstructions should be saved in the results.
+            If measures shall be applied after this method returns,
+            it must be ``True``.
+        """
         results = EvaluationResultTable()
         for task in self.tasks:
             test_data = task['test_data']
             reconstruction = task['reconstructor'].reconstruct(
                 test_data.observation)
-            results.reconstructions.append(reconstruction)
+            if save_reconstructions:
+                results.reconstructions.append(reconstruction)
+            else:
+                results.reconstructions.append(None)
+            results.test_data.append(test_data)
             measure_values = []
             for measure in task['measures']:
                 measure_values.append(measure.apply(reconstruction,
@@ -138,14 +150,39 @@ class EvaluationTaskTable:
 
 class EvaluationResultTable:
     """Result table of running an evaluation task table."""
-    def __init__(self, reconstructions=None, measure_values=None):
+    def __init__(self, reconstructions=None, test_data=None,
+                 measure_values=None):
         self.reconstructions = reconstructions or []
+        self.test_data = test_data or ([[]] * len(self.reconstructions))
         self.measure_values = measure_values or (
             [[]] * len(self.reconstructions))
+
+    def apply_measures(self, measures, index=None):
+        """Apply (additional) measures on reconstructions.
+
+        Only possible if the reconstructions were saved.
+        """
+        if index is None:
+            indexes = range(len(self.reconstructions))
+        elif np.isscalar(index):
+            indexes = [index]
+        elif isinstance(index, list):
+            indexes = index
+        else:
+            raise ValueError('index must be a scalar, a list of integers or '
+                             '``None``')
+        for i in indexes:
+            reconstruction = self.reconstructions[i]
+            ground_truth = self.test_data[i].ground_truth
+            for measure in measures:
+                self.measure_values[i].append(measure.apply(reconstruction,
+                                                            ground_truth))
 
     def plot_reconstruction(self, index):
         """Plot the reconstruction at the specified index."""
         reconstruction = self.reconstructions[index]
+        if reconstruction is None:
+            raise ValueError('reconstruction is ``None``')
         if reconstruction.asarray().ndim == 1:
             plt.plot(reconstruction)
         elif reconstruction.asarray().ndim == 2:

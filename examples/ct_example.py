@@ -28,6 +28,8 @@ gn_reconstructor = GaussNewtonReconstructor(ray_trafo, reco_space.zero(), 4)
 lw_reconstructor = LandweberReconstructor(ray_trafo, reco_space.zero(), 100)
 reconstructors = [fbp_reconstructor, cg_reconstructor, gn_reconstructor,
                   lw_reconstructor]
-eval_tt.append_all_combinations([test_data], reconstructors, [L2Measure()])
+eval_tt.append_all_combinations([test_data], reconstructors)
 results = eval_tt.run()
 results.plot_all_reconstructions()
+results.apply_measures([L2Measure()])
+print('measure_values: {}'.format(results.measure_values))

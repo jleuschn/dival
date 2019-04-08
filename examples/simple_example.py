@@ -1,5 +1,5 @@
 from data import uniform_discr_element
-from evaluation import EvaluationTaskTable, TestData
+from evaluation import EvaluationTaskTable, TestData, L2Measure
 from reconstruction import Reconstructor
 
 ground_truth = uniform_discr_element([0, 1, 2, 3, 4, 5, 6])
@@ -14,6 +14,7 @@ class MinusOneReconstructor(Reconstructor):
 
 
 reconstructor = MinusOneReconstructor()
-eval_tt.append(test_data, reconstructor)
+eval_tt.append(test_data, reconstructor, [L2Measure()])
 results = eval_tt.run()
 results.plot_reconstruction(0)
+print(results.measure_values)
