@@ -1,6 +1,6 @@
 import numpy as np
 import odl
-from evaluation import EvaluationTaskTable, TestData, L2Measure
+from evaluation import EvaluationTaskTable, TestData, L2Measure, PSNRMeasure
 from reconstruction import (FunctionReconstructor, CGReconstructor,
                             GaussNewtonReconstructor, LandweberReconstructor)
 
@@ -16,7 +16,7 @@ ray_trafo = odl.tomo.RayTransform(reco_space, geometry, impl='astra_cpu')
 proj_data = ray_trafo(phantom)
 observation = proj_data + np.random.standard_normal(proj_data.shape)
 
-test_data = TestData(observation, ground_truth)
+test_data = TestData(observation, ground_truth, name='shepp_logan + gaussian')
 
 eval_tt = EvaluationTaskTable()
 
@@ -31,5 +31,5 @@ reconstructors = [fbp_reconstructor, cg_reconstructor, gn_reconstructor,
 eval_tt.append_all_combinations([test_data], reconstructors)
 results = eval_tt.run()
 results.plot_all_reconstructions()
-results.apply_measures([L2Measure()])
-print('measure_values: {}'.format(results.measure_values))
+results.apply_measures([L2Measure(), PSNRMeasure()])
+print(results)
