@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """Provides utility functions for visualization."""
+from warnings import warn
 from math import ceil
 import matplotlib.pyplot as plt
+# import mpl_toolkits.axes_grid.axes_size as Size
+# from mpl_toolkits.axes_grid import Divider
 import numpy as np
 
 
@@ -20,6 +23,15 @@ def plot_image(x, fig=None, ax=None, **kwargs):
     ax : matplotlib.axes.Axes, optional
         The axes to plot the image in. If ``None``, an axes object is created
         in `fig`.
+    kwargs : dict, optional
+        Keyword arguments passed to `ax.imshow`.
+
+    Returns
+    -------
+    im : matplotlib.image.AxesImage
+        The image that was plotted.
+    ax : matplotlib.axes.Axes
+        The axes the image was plotted in.
     """
     if fig is None:
         if ax is None:
@@ -28,7 +40,6 @@ def plot_image(x, fig=None, ax=None, **kwargs):
             fig = ax.get_figure()
     if ax is None:
         ax = fig.add_subplot(111)
-    kwargs.setdefault('origin', 'lower')
     kwargs.setdefault('cmap', 'gray')
     xticks = kwargs.pop('xticks', None)
     yticks = kwargs.pop('yticks', None)
@@ -36,11 +47,12 @@ def plot_image(x, fig=None, ax=None, **kwargs):
         ax.set_xticks(xticks)
     if yticks is not None:
         ax.set_yticks(yticks)
-    ax.imshow(x.asarray().T, **kwargs)
-    return ax
+    im = ax.imshow(x.asarray().T, **kwargs)
+    return im, ax
 
 
-def plot_images(x_list, nrows=1, ncols=-1, fig=None, **kwargs):
+def plot_images(x_list, nrows=1, ncols=-1, fig=None, vrange='equal',
+                cbar='auto', rect=None, fig_size=None, **kwargs):
     """Plot multiple images using matplotlib's `imshow` method in subplots.
 
     Parameters
@@ -56,8 +68,38 @@ def plot_images(x_list, nrows=1, ncols=-1, fig=None, **kwargs):
         The number of subplot columns. If -1, it is computed by
         ``ceil(len(x_list)/nrows)`` (default). If both `nrows` and `ncols` are
         given, the value of `ncols` is ignored.
+    vrange : {'equal', 'individual'} or [list of ](float, float), optional
+        Value ranges for the colors of the images.
+        If a string is passed, the range is auto-computed:
+
+            ``'equal'``
+                The same colors are used for all images.
+            ``'individual'``
+                The colors differ between the images.
+
+        If a tuple of floats is passed, it is used for all images.
+        If a list of tuples of floats is passed, each tuple is used for one
+        image.
+    cbar : {'one', 'many', 'auto', 'none'}, optional
+        Colorbar option.
+        If ``cbar=='one'``, one colorbar is shown. Only possible if the value
+        ranges used for the colors (cf. `vrange`) are the same for all images.
+        If ``cbar=='many'``, a colorbar is shown for every image.
+        If ``cbar=='auto'``, either ``'one'`` or ``'many'`` is chosen,
+        depending on whether `vrange` is equal for all images.
+        If ``cbar=='none'``, no colorbars are shown.
     fig : matplotlib.figure.Figure, optional
         The figure to plot the images in. If ``None``, a new figure is created.
+    kwargs : dict, optional
+        Keyword arguments passed to `plot_image`, which in turn passes them to
+        ``imshow``.
+
+    Returns
+    -------
+    im : ndarray of matplotlib.image.AxesImage
+        The images that were plotted.
+    ax : ndarray of matplotlib.axes.Axes
+        The axes the images were plotted in.
     """
     if fig is None:
         fig = plt.figure()
@@ -67,8 +109,43 @@ def plot_images(x_list, nrows=1, ncols=-1, fig=None, **kwargs):
         else:
             nrows = ceil(len(x_list)/ncols)
     ncols = ceil(len(x_list)/nrows)
+    if rect is None:
+        rect = [0.1, 0.1, 0.8, 0.8]
+    if fig_size is not None:
+        fig.set_size_inches(fig_size)
+    if isinstance(vrange, str):
+        if vrange == 'equal':
+            vrange_ = [(min((np.min(x) for x in x_list)),
+                        max((np.max(x) for x in x_list)))] * len(x_list)
+            VRANGE_EQUAL = True
+        elif vrange == 'individual':
+            vrange_ = [(np.min(x), np.max(x)) for x in x_list]
+            VRANGE_EQUAL = False
+        else:
+            raise ValueError("`vrange` must be 'equal' or 'individual'")
+    elif isinstance(vrange, tuple) and len(vrange) == 2:
+        vrange_ = [vrange] * len(x_list)
+        VRANGE_EQUAL = True
+    else:
+        vrange_ = vrange
+        VRANGE_EQUAL = False
+    if not VRANGE_EQUAL:
+        if cbar == 'one':
+            warn("cannot use cbar='one' when vrange is not equal for all"
+                 "images, falling back to cbar='many'")
+        if cbar != 'none':
+            cbar = 'many'
+    elif cbar == 'auto':
+        cbar = 'one'
     ax = fig.subplots(nrows, ncols)
-    if nrows == 1 and ncols == 1:
+    if isinstance(ax, plt.Axes):
         ax = np.array(ax)
-    for x, a in zip(x_list, ax.flat):
-        plot_image(x, ax=a, **kwargs)
+    im = np.empty(ax.shape, dtype=object)
+    for i, (x, ax_, v) in enumerate(zip(x_list, ax.flat, vrange_)):
+        im_, _ = plot_image(x, ax=ax_, vmin=v[0], vmax=v[1], **kwargs)
+        im.flat[i] = im_
+        if cbar == 'many':
+            fig.colorbar(im_, ax=ax_)
+    if cbar == 'one':
+        fig.colorbar(im[0], ax=ax)
+    return im, ax

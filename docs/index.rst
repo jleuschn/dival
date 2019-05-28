@@ -8,7 +8,7 @@ learning based methods for inverse problems written in python.
    :maxdepth: 2
    :caption: Contents:
    
-   api
+   modules
    
 
 Indices and tables

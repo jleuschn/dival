@@ -1,231 +1,287 @@
 # -*- coding: utf-8 -*-
 """Provides classes and methods useful for evaluation of methods."""
-from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from util.plot import plot_image
+import sys
+from tqdm import tqdm
+from odl.solvers.util.callback import CallbackStore
+from dival.util.plot import plot_image, plot_images
+from dival.util.std_out_err_redirect_tqdm import std_out_err_redirect_tqdm
+from dival.measure import Measure
+from dival.data import TestData
+from dival import LearnedReconstructor
+from dival.hyper_param_optimization import optimize_hyper_params
 
 
-class TestData:
-    """
-    Bundles an `observation` with a `ground_truth`.
-
-    Attributes
-    ----------
-    observation : `Data`
-        The observation, possibly distorted or low-dimensional.
-    ground_truth : `Data`
-        The ground truth. May be replaced with a good quality reference.
-        Reconstructors will be evaluated by comparing their reconstructions
-        with this value. May also be ``None`` if no evaluation based on
-        ground truth shall be performed.
-    """
-    def __init__(self, observation, ground_truth=None,
-                 name='', short_name='', description=''):
-        self.observation = observation
-        self.ground_truth = ground_truth
-        self.name = name
-        self.short_name = short_name
-        self.description = description
-
-
-class Measure(ABC):
-    """Abstract base class for measures used for evaluation.
+class TaskTable:
+    """Task table containing reconstruction tasks to evaluate.
 
     Attributes
     ----------
-    measure_type : {'distance', 'quality'}
-        The measure type.
-        Measures with type ``'distance'`` should attain small values if the
-        reconstruction is good. Measures with type ``'quality'`` should attain
-        large values if the reconstruction is good.
-    short_name : str
-        Short name of the measure, used as identifier (e.g. dict key).
     name : str
-        Name of the measure.
-    description : str
-        Description of the measure.
-
-    Methods
-    -------
-    apply(reconstruction, ground_truth)
-        Calculate the value of this measure.
+        Name of the task table.
+    tasks : list of dict
+        Tasks that shall be run. The fields of each dict are set from the
+        parameters to `append` (or `append_all_combinations`). See the
+        documentation of `append` for documentation of these fields.
     """
-    measure_type = None
-    short_name = ''
-    name = ''
-    description = ''
-
-    @abstractmethod
-    def apply(self, reconstruction, ground_truth):
-        """Calculate the value of this measure.
-
-        Returns
-        -------
-        float
-            The value of this measure for the given `reconstruction` and
-            `ground_truth`.
-        """
-
-
-def measure_by_short_name(short_name):
-    """Return a measure object by giving a short name.
-
-    Parameters
-    ----------
-    short_name : str
-        The `short_name` of the `Measure` subclass.
-
-    Returns
-    -------
-    subclass of `Measure`
-        Object of the measure class given by `short_name`.
-    """
-    measure_classes = [L2Measure, MSEMeasure, PSNRMeasure]
-    measure_dict = {m.short_name: m for m in measure_classes}
-    try:
-        measure_class = measure_dict[short_name.lower()]
-    except KeyError:
-        raise ValueError('unknown measure name \'{}\''.format(short_name))
-    return measure_class()
-
-
-class L2Measure(Measure):
-    """The euclidean (l2) distance measure."""
-    measure_type = 'distance'
-    short_name = 'l2'
-    name = 'euclidean distance'
-    description = ('distance given by '
-                   'sqrt(sum((reconstruction-ground_truth)**2))')
-
-    def apply(self, reconstruction, ground_truth):
-        return np.linalg.norm((reconstruction.asarray() -
-                               ground_truth.asarray()).flat)
-
-
-class MSEMeasure(Measure):
-    """The mean squared error distance measure."""
-    measure_type = 'distance'
-    short_name = 'mse'
-    name = 'mean squared error'
-    description = ('distance given by '
-                   '1/n * sum((reconstruction-ground_truth)**2)')
-
-    def apply(self, reconstruction, ground_truth):
-        return np.mean((reconstruction.asarray() - ground_truth.asarray())**2)
-
-
-class PSNRMeasure(Measure):
-    """The peak signal-to-noise ratio (PSNR) measure.
-
-    Attributes
-    ----------
-    max_value : float
-        Maximum image value that is possible.
-        If `max_value` is ``None``, ``np.max(ground_truth)`` is used in
-        `apply`.
-    """
-    measure_type = 'quality'
-    short_name = 'psnr'
-    name = 'peak signal-to-noise ratio'
-    description = 'quality given by 10*log10(MAX**2/MSE)'
-
-    def __init__(self, max_value=None):
-        self.max_value = max_value
-
-    def apply(self, reconstruction, ground_truth):
-        gt = ground_truth.asarray()
-        mse = np.mean((reconstruction.asarray() - gt)**2)
-        if mse == 0.:
-            return float('inf')
-        max_value = self.max_value or np.max(gt)
-        return 20*np.log10(max_value) - 10*np.log10(mse)
-
-
-class EvaluationTaskTable:
-    """Task table containing reconstruction tasks to evaluate."""
-    def __init__(self, tasks=None, name=''):
-        self.tasks = tasks or []
+    def __init__(self, name=''):
         self.name = name
+        self.tasks = []
 
-    def run(self, save_reconstructions=True):
+    def run(self, save_reconstructions=True, show_progress='text'):
         """Run all tasks and return the results.
 
         Parameters
         ----------
         save_reconstructions : bool, optional
             Whether the reconstructions should be saved in the results.
-            If measures shall be applied after this method returns,
-            it must be ``True``.
+            The default is ``True``.
+
+            If measures shall be applied after this method returns, it must be
+            ``True``.
+
+            If ``False``, no iterates (intermediate reconstructions) will be
+            saved, even if ``task['options']['save_iterates']`` is ``True``.
+        show_progress : str, optional
+            Whether and how to show progress. Options are:
+
+                ``'text'`` (default)
+                    print a line before running each task
+                ``'tqdm'``
+                    show a progress bar with ``tqdm``
+                ``None``
+                    do not show progress
         """
-        results = EvaluationResultTable()
+        results = ResultTable()
         row_list = []
-        for task in self.tasks:
-            test_data = task['test_data']
-            reconstruction = task['reconstructor'].reconstruct(
-                test_data.observation)
-            measure_values = {}
-            for measure in task['measures']:
-                measure_values[measure.short_name] = measure.apply(
-                    reconstruction, test_data.ground_truth)
-            row = {'reconstruction': None,
-                   'test_data': test_data,
-                   'measure_values': measure_values}
-            if save_reconstructions:
-                row['reconstruction'] = reconstruction
-            row_list.append(row)
+        with std_out_err_redirect_tqdm(None if show_progress == 'tqdm' else
+                                       sys.stdout) as orig_stdout:
+            for i, task in enumerate(tqdm(self.tasks,
+                                          desc='task',
+                                          file=orig_stdout,
+                                          disable=(show_progress != 'tqdm'))):
+                if show_progress == 'text':
+                    print('running task {i}/{num_tasks} ...'.format(
+                        i=i, num_tasks=len(self.tasks)))
+                test_data = task['test_data']
+                reconstructor = task['reconstructor']
+                if test_data.ground_truth is None and task['measures']:
+                    raise ValueError('missing ground truth, cannot apply '
+                                     'measures')
+                measures = [(measure if isinstance(measure, Measure) else
+                             Measure.get_by_short_name(measure))
+                            for measure in task['measures']]
+                callbacks = []
+                if reconstructor.callback is not None:
+                    callbacks.append(reconstructor.callback)
+                options = task['options']
+                if save_reconstructions and options.get('save_iterates'):
+                    iterates = []
+                    callback_save_iterates = CallbackStore(
+                        iterates,
+                        step=options.get('save_iterates_step', 1))
+                    callbacks.append(callback_save_iterates)
+                if options.get('save_iterates_measure_values'):
+                    iterates_measure_values = {}
+                    for measure in measures:
+                        iterates_measure_values[measure.short_name] = []
+                        callback_store = CallbackStore(
+                            iterates_measure_values[measure.short_name],
+                            step=options.get('save_iterates_step', 1))
+                        callbacks.append((
+                            callback_store *
+                            measure.as_operator_for_fixed_ground_truth(
+                                test_data.ground_truth)))
+                if len(callbacks) > 0:
+                    reconstructor.callback = callbacks[-1]
+                    for callback in callbacks[-2::-1]:
+                        reconstructor.callback &= callback
+
+                hp_opt = options.get('hyper_param_search')
+                if hp_opt:
+                    kwargs = {}
+                    for k in ('hyperopt_max_evals',
+                              'hyperopt_max_evals_retrain'):
+                        v = hp_opt.get(k)
+                        if v is not None:
+                            kwargs[k] = v
+                    optimize_hyper_params(
+                        reconstructor, test_data, hp_opt['measure'],
+                        dataset=task.get('dataset'),
+                        HYPER_PARAMS_override=hp_opt.get('HYPER_PARAMS'),
+                        hyperopt_rstate=hp_opt.get('hyperopt_rstate'),
+                        show_progressbar=hp_opt.get('show_progress',
+                                                    show_progress == 'text'),
+                        tqdm_file=orig_stdout,
+                        **kwargs)
+                reconstruction = reconstructor.reconstruct(
+                    test_data.observation)
+
+                measure_values = {}
+                for measure in measures:
+                    measure_values[measure.short_name] = measure.apply(
+                        reconstruction, test_data.ground_truth)
+                misc = {}
+                if save_reconstructions and options.get('save_iterates'):
+                    misc['iterates'] = iterates
+                if options.get('save_iterates_measure_values'):
+                    misc['iterates_measure_values'] = iterates_measure_values
+                row = {'reconstruction': None,
+                       'reconstructor': reconstructor,
+                       'test_data': test_data,
+                       'measure_values': measure_values,
+                       'misc': misc}
+                if save_reconstructions:
+                    row['reconstruction'] = reconstruction
+                row_list.append(row)
         results.results = pd.concat([results.results, pd.DataFrame(row_list)],
                                     ignore_index=True, sort=False)
         return results
 
-    def append(self, test_data, reconstructor, measures=None):
-        """Append a task."""
+    def append(self, reconstructor, test_data, measures=None, dataset=None,
+               options=None):
+        """Append a task.
+
+        Parameters
+        ----------
+        reconstructor : `Reconstructor`
+            The reconstructor.
+        test_data : `TestData`
+            The test data.
+        measures : sequence of (`Measure` or str)
+            Measures that will be applied. Either `Measure` objects or their
+            short names can be passed.
+        dataset : `Dataset`
+            The dataset that will be passed to `reconstructor.train` if it is a
+            `LearnedReconstructor`.
+        options : dict
+            Options that will be used. Options are:
+
+            ``'save_iterates'`` : bool, optional
+                Whether to save the intermediate reconstructions of iterative
+                reconstructors (the default is ``False``).
+                Will be ignored if ``save_reconstructions=False`` is passed to
+                `run`. Requires the reconstructor to call its `callback`
+                attribute after each iteration.
+            ``'save_iterates_measure_values'`` : bool, optional
+                Whether to compute and save the measure values for each
+                intermediate reconstruction of iterative reconstructors
+                (the default is ``False``). Requires the reconstructor to call
+                its `callback` attribute after each iteration.
+            ``'save_iterates_step'`` : int, optional
+                Step size for ``'save_iterates'`` and
+                ``'save_iterates_measure_values'`` (the default is 1).
+            ``'hyper_param_search'`` : dict, optional
+                Options for hyper parameter search. If ``None``, the default
+                hyper parameter values are used. If given, it must specify the
+                following fields:
+
+                    ``'measure'`` : `Measure`
+                        The measure used for hyper parameter optimization.
+                    ``'dataset'`` : `Dataset`, optional
+                        Dataset for training the reconstructor. Only needs to
+                        be specified if the reconstructor is a
+                        `LearnedReconstructor`.
+                    ``'HYPER_PARAMS'`` : dict, optional
+                        Hyper parameter specification overriding the defaults
+                        in ``type(reconstructor).HYPER_PARAMS``.
+                        The structure of this dict is the same as the structure
+                        of ``Reconstructor.HYPER_PARAMS``, except that all
+                        fields are optional.
+                        Here, each value of a dict for one parameter is treated
+                        as an entity, i.e. specifying the dict
+                        ``HYPER_PARAMS[...]['grid_search_options']`` overrides
+                        the whole dict, not only the specified keys in it.
+        """
+        if isinstance(reconstructor, LearnedReconstructor) and dataset is None:
+            raise ValueError('in order to use a learned reconstructor you '
+                             'must specify a `dataset` for training')
         if measures is None:
             measures = []
-        self.tasks.append({'test_data': test_data,
-                           'reconstructor': reconstructor,
-                           'measures': measures})
+        if options is None:
+            options = {}
+        self.tasks.append({'reconstructor': reconstructor,
+                           'test_data': test_data,
+                           'measures': measures,
+                           'dataset': dataset,
+                           'options': options})
 
-    def append_all_combinations(self, test_data, reconstructors,
-                                measures=None):
-        """Append all combinations of the passed parameter lists as tasks."""
+    def append_all_combinations(self, reconstructors, test_data, measures=None,
+                                datasets=None, options=None):
+        """Append tasks of all combinations of test data, reconstructors and
+        optionally datasets.
+        The order is taken from the lists, with test data changing slowest
+        and reconstructor changing fastest.
+
+        Parameters
+        ----------
+        reconstructors : list of `Reconstructor`
+            Reconstructor list.
+        test_data : list of `TestData`
+            Test data list.
+        measures : sequence of (`Measure` or str)
+            Measures that will be applied. The same measures are used for all
+            combinations of test data and reconstructors. Either `Measure`
+            objects or their short names can be passed.
+        datasets : list of `Dataset`, optional
+            Dataset list. Required if `reconstructors` contains at least one
+            `LearnedReconstructor`.
+        options : dict
+            Options that will be used. The same options are used for all
+            combinations of test data and reconstructors. See `append` for
+            documentation of the options.
+        """
+        if datasets is None:
+            datasets = [None]
         for test_data_ in test_data:
-            for reconstructor in reconstructors:
-                self.append(test_data_, reconstructor, measures)
+            for dataset in datasets:
+                for reconstructor in reconstructors:
+                    self.append(reconstructor=reconstructor,
+                                test_data=test_data_, measures=measures,
+                                dataset=dataset, options=options)
 
     def __repr__(self):
-        return "EvaluationTaskTable(name='{}', tasks={})".format(
-            self.name, self.tasks.__repr__())
+        return "TaskTable(name='{name}', tasks={tasks})".format(
+            name=self.name,
+            tasks=self.tasks)
 
 
-class EvaluationResultTable:
+class ResultTable:
     """Result table of running an evaluation task table.
 
     Attributes
     ----------
     results : `pandas.DataFrame`
         The results.
-        It has at least the columns ``"reconstructions"``, ``"test_data"`` and
-        ``"measure_values"``.
+        It has the columns ``'reconstruction'``, ``'reconstructor'``,
+        ``'test_data'``, ``'measure_values'`` and ``'misc'``.
     """
-    def __init__(self, reconstructions=None, test_data=None,
-                 measure_values=None):
+    def __init__(self, reconstructions=None, reconstructor=None,
+                 test_data=None, measure_values=None, misc=None):
         if reconstructions is None:
             reconstructions = []
+        if reconstructor is None:
+            reconstructor = []
         if test_data is None:
             test_data = []
         if measure_values is None:
             measure_values = []
+        if misc is None:
+            misc = []
         data_dict = {'reconstruction': reconstructions,
+                     'reconstructor': reconstructor,
                      'test_data': test_data,
-                     'measure_values': measure_values}
+                     'measure_values': measure_values,
+                     'misc': misc}
         self.results = pd.DataFrame.from_dict(data_dict)
 
     def apply_measures(self, measures, index=None):
         """Apply (additional) measures to reconstructions.
 
-        Only possible if the reconstructions were saved.
+        This is not possible if the reconstructions were not saved, in which
+        case a `ValueError` is raised.
 
         Parameters
         ----------
@@ -234,6 +290,11 @@ class EvaluationResultTable:
         index : int or sequence of ints, optional
             Indexes of results to which the measures shall be applied.
             If `index` is ``None``, this is interpreted as "all results".
+
+        Raises
+        ------
+        ValueError
+            If a reconstruction is missing or `index` is not valid.
         """
         if index is None:
             indexes = range(len(self.results))
@@ -246,51 +307,218 @@ class EvaluationResultTable:
                              '``None``')
         for i in indexes:
             row = self.results.iloc[i]
+            if row['reconstruction'] is None:
+                raise ValueError('reconstruction missing in row {i}'.format(
+                    i=i))
             for measure in measures:
+                if isinstance(measure, str):
+                    measure = Measure.get_by_short_name(measure)
                 row['measure_values'][measure.short_name] = measure.apply(
                     row['reconstruction'], row['test_data'].ground_truth)
 
-    def plot_reconstruction(self, index):
+    def plot_reconstruction(self, index, plot_ground_truth=True, **kwargs):
         """Plot the reconstruction at the specified index.
+        Supports only 1d and 2d reconstructions.
 
         Parameters
         ----------
         index : int
             Index of the reconstruction.
+        plot_ground_truth : bool, optional
+            Whether to show the ground truth next to the reconstruction.
+            The default is ``True``.
+        kwargs : dict
+            Keyword arguments that are passed to `plot_image` if the
+            reconstruction is 2d.
+
+        Returns
+        -------
+        ax : `matplotlib.axes.Axes`
+            The axes the reconstruction was plotted in.
         """
-        reconstruction = self.results.iloc[index].at['reconstruction']
+        row = self.results.iloc[index]
+        reconstruction = row.at['reconstruction']
+        reconstructor = row.at['reconstructor']
+        test_data = row.at['test_data']
         if reconstruction is None:
             raise ValueError('reconstruction is ``None``')
-        if reconstruction.asarray().ndim == 1:
-            plt.plot(reconstruction)
-        elif reconstruction.asarray().ndim == 2:
-            plot_image(reconstruction)
-        else:
+        if reconstruction.asarray().ndim > 2:
             print('only 1d and 2d reconstructions can be plotted (currently)')
+            return
+        if reconstruction.asarray().ndim == 1:
+            x = reconstruction.space.points()
+            ax = plt.subplot()
+            ax.plot(x, reconstruction, label=reconstructor.name)
+            if plot_ground_truth:
+                ax.plot(x, test_data.ground_truth, label='ground truth')
+            ax.legend()
+        elif reconstruction.asarray().ndim == 2:
+            if plot_ground_truth:
+                _, ax = plot_images([reconstruction, test_data.ground_truth],
+                                    **kwargs)
+                ax[1].set_title('ground truth')
+                ax = ax[0]
+            else:
+                _, ax = plot_image(reconstruction, **kwargs)
+            ax.set_title(reconstructor.name)
+        return ax
 
-    def plot_all_reconstructions(self):
-        """Plot all reconstructions."""
+    def plot_all_reconstructions(self, **kwargs):
+        """Plot all reconstructions.
+
+        Parameters
+        ----------
+        kwargs : dict
+            Keyword arguments that are forwarded to `self.plot_reconstruction`.
+
+        Returns
+        -------
+        ax : ndarray of `matplotlib.axes.Axes`
+            List of the axes the reconstructions were plotted in.
+        """
+        ax = []
         for i in range(len(self.results)):
-            self.plot_reconstruction(i)
+            ax_ = self.plot_reconstruction(i, **kwargs)
+            ax.append(ax_)
+        return np.array(ax)
 
-    def to_string(self, **kwargs):
-        """Convert to string.
+    def plot_convergence(self, index, measures=None, fig_size=None,
+                         gridspec_kw=None):
+        """
+        Plot measure values for saved iterates.
 
+        This shows the convergence behavior with respect to the measures.
+
+        Parameters
+        ----------
+        index : int
+            Row index of the result.
+        measures : list of `Measure` or `Measure`, optional
+            Measures to apply. Each measure is plotted in a subplot.
+            If ``None`` is passed, all measures in ``result['measure_values']``
+            are used.
+
+        Returns
+        -------
+        ax : ndarray of matplotlib.axes.Axes
+            The axes the measure values were plotted in.
+        """
+        row = self.results.iloc[index]
+        iterates_measure_values = row['misc'].get('iterates_measure_values')
+        if not iterates_measure_values:
+            iterates = row['misc'].get('iterates')
+            if not iterates:
+                raise ValueError(
+                    "no 'iterates_measure_values' or 'iterates' in results "
+                    "row {}".format(index))
+        if measures is None:
+            measures = row['measure_values'].keys()
+        elif isinstance(measures, Measure):
+            measures = [measures]
+        fig, ax = plt.subplots(len(measures), 1, gridspec_kw=gridspec_kw)
+        if fig_size is not None:
+            fig.set_size_inches(fig_size)
+        fig.suptitle('convergence of {}'.format(row['reconstructor'].name))
+        for measure, ax_ in zip(measures, ax.flat):
+            if isinstance(measure, str):
+                measure = Measure.get_by_short_name(measure)
+            if iterates_measure_values:
+                errors = iterates_measure_values[measure.short_name]
+            else:
+                errors = [measure.apply(x, row['test_data'].ground_truth)
+                          for x in iterates]
+            ax_.plot(errors)
+            ax_.set_title(measure.short_name)
+        return ax
+
+    def plot_performance(self, measure, reconstructors=None, test_data=None,
+                         **kwargs):
+        """
+        Plot mean measure values for different reconstructors.
+        The values have to be computed previously, e.g. by
+        `self.apply_measures`.
+
+        The mean is computed over all rows of `self.results` with the specified
+        `test_data` that store the requested `measure` value.
+
+        Parameters
+        ----------
+        measure : `Measure` or str
+            The measure to plot (or its ``short_name``).
+        reconstructors : sequence of `Reconstructor`, optional
+            The reconstructors to compare. If ``None`` (default), all
+            reconstructors that are found in the results are compared.
+        test_data : sequence of `TestData` or `TestData`, optional
+            Test data to take into account for computing the mean value.
+
+        Returns
+        -------
+        ax : `matplotlib.axes.Axes`
+            The axes the performance was plotted in.
+        """
+        if not isinstance(measure, Measure):
+            measure = Measure.get_by_short_name(measure)
+        if reconstructors is None:
+            reconstructors = self.results['reconstructor'].unique()
+        if isinstance(test_data, TestData):
+            test_data = [test_data]
+        mask = [measure.short_name in row['measure_values'].keys() and
+                row['reconstructor'] in reconstructors and
+                (test_data is None or row['test_data'] in test_data)
+                for _, row in self.results.iterrows()]
+        rows = self.results[mask]
+        v = []
+        for reconstructor in reconstructors:
+            r_rows = rows[rows['reconstructor'] == reconstructor]
+            values = [mvs[measure.short_name] for mvs in
+                      r_rows['measure_values']]
+            v.append(np.mean(values))
+        fig, ax = plt.subplots(**kwargs)
+        ax.bar(range(len(v)), v)
+        ax.set_xticks(range(len(v)))
+        ax.set_xticklabels([r.name for r in reconstructors], rotation=30)
+        ax.set_title('{measure_name}'.format(measure_name=measure.name))
+        return ax
+
+    def to_string(self, max_colwidth=70, formatters=None, **kwargs):
+        """Convert to string. Used by `self.__str__`.
+
+        Parameters
+        ----------
+        max_colwidth : int, optional
+            Maximum width of each column, c.f. pandas' option
+            ``'display.max_colwidth'``. Default is 70.
+        formatters : dict of functions, optional
+            Formatter functions for the columns of `self.results`, passed to
+            `self.results.to_string`.
         kwargs : dict
             Keyword arguments passed to `self.results.to_string`.
+
+        Returns
+        -------
+        str
+            The string.
         """
         def test_data_formatter(test_data):
-            if test_data.name:
-                return test_data.name
-            else:
-                return test_data.__str__()
-        return "EvaluationResultTable(results=\n{}\n)".\
-            format(self.results.to_string(formatters={'test_data':
-                                                      test_data_formatter},
-                                          **kwargs))
+            return test_data.name or test_data.__repr__()
+        formatters_ = {}
+        formatters_['test_data'] = test_data_formatter
+        if formatters is not None:
+            formatters_.update(formatters)
+        with pd.option_context('display.max_colwidth', max_colwidth):
+            return "ResultTable(results=\n{}\n)".format(
+                self.results.to_string(formatters=formatters_, **kwargs))
+
+    def print_summary(self):
+        """Prints a summary of the results.
+        """
+        print('ResultTable with {:d} rows.'.format(len(self.results)))
+        test_data_list = pd.unique(self.results['test_data'])
+        if len(test_data_list) == 1:
+            print('Test data: {}'.format(test_data_list[0]))
 
     def __repr__(self):
-        return "EvaluationResultTable(results=\n{}\n)".format(self.results)
+        return "ResultTable(results=\n{results})".format(results=self.results)
 
     def __str__(self):
         return self.to_string()

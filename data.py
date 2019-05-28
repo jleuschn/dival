@@ -1,24 +1,34 @@
 # -*- coding: utf-8 -*-
-"""Provides an interface to the ODL element classes."""
-from odl.discr.lp_discr import uniform_discr
-import numpy as np
-
-
-def uniform_discr_element(inp, space=None):
-    """Generate an element of a ODL space from an array-like.
-
-    Parameters
-    ----------
-    inp : array-like
-        The input data from which the element is generated.
-    space : `odl.discr.DiscretizedSpace`, optional
-        The space which the element will belong to. If not given, a uniform
-        discretization space with cell size 1 centered around the origin is
-        generated.
+class TestData:
     """
-    inp = np.asarray(inp)
-    if space is None:
-        space = uniform_discr(-np.array(inp.shape)/2, np.array(inp.shape)/2,
-                              inp.shape)
-    element = space.element(inp)
-    return element
+    Bundles an `observation` with a `ground_truth`.
+
+    Attributes
+    ----------
+    observation : observation space element
+        The observation, possibly distorted or low-dimensional.
+    ground_truth : reconstruction space element
+        The ground truth. May be replaced with a good quality reference.
+        Reconstructors will be evaluated by comparing their reconstructions
+        with this value. May also be ``None`` if no evaluation based on
+        ground truth shall be performed.
+    """
+    def __init__(self, observation, ground_truth=None,
+                 name='', description=''):
+        self.observation = observation
+        self.ground_truth = ground_truth
+        self.name = name
+        self.description = description
+
+    def __repr__(self):
+        return ("TestData(observation=\n{observation}, "
+                "ground_truth=\n{ground_truth}, name='{name}', "
+                "description='{description}')".format(
+                    observation=self.observation,
+                    ground_truth=self.ground_truth,
+                    name=self.name,
+                    description=self.description))
+
+    def __str__(self):
+        return ("TestData('{name}')".format(name=self.name) if self.name
+                else self.__repr__())
