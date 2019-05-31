@@ -26,22 +26,21 @@ class LIDCIDRIDivalDataset(GroundTruthDataset):
     def __init__(self):
         self.shape = (362, 362)
         with open(FILE_LIST_FILE, 'r') as json_file:
-            json_dict = json.load(json_file)
-        self.train_dcm_files = json_dict['train']
-        self.test_dcm_files = json_dict['test']
-        self.train_len = len(self.train_dcm_files)
-        self.test_len = len(self.test_dcm_files)
+            self.dcm_files_dict = json.load(json_file)
+        self.train_len = len(self.dcm_files_dict['train'])
+        self.validation_len = len(self.dcm_files_dict['validation'])
+        self.test_len = len(self.dcm_files_dict['test'])
 
-    def generator(self, test=False, min_pt=None, max_pt=None):
+    def generator(self, part='train', min_pt=None, max_pt=None):
         """Yield selected cropped and normalized LIDC-IDRI images of shape
         (362, 362).
 
         Parameters
         ----------
         min_pt : [int, int], optional
-            Minimum values of the lp space.
+            Minimum values of the lp space. Default: [-181, -181].
         max_pt : [int, int], optional
-            Maximum values of the lp space.
+            Maximum values of the lp space. Default: [181, 181].
         """
         MIN_VAL, MAX_VAL = -1024, 3071
 
@@ -51,8 +50,13 @@ class LIDCIDRIDivalDataset(GroundTruthDataset):
             max_pt = [self.shape[0]/2, self.shape[1]/2]
         space = uniform_discr(min_pt, max_pt, self.shape, dtype=np.float32)
 
-        r = np.random.RandomState(1 if test else 42)
-        dcm_files = self.test_dcm_files if test else self.train_dcm_files
+        seed = 42
+        if part == 'validation':
+            seed = 0
+        elif part == 'test':
+            seed = 1
+        r = np.random.RandomState(seed)
+        dcm_files = self.dcm_files_dict[part]
         for dcm_file in dcm_files:
             dataset = dcmread(os.path.join(DATA_PATH, dcm_file))
 

@@ -82,6 +82,7 @@ if __name__ == '__main__':
     ct_dirs = get_dirs()
 
     NUM_TEST_PATIENTS = 50
+    NUM_VALIDATION_IMAGES = 5000
     patients = np.unique([s.split('/')[0] for s in ct_dirs])
     np.random.shuffle(patients)
     test_patients = patients[-NUM_TEST_PATIENTS:]
@@ -98,9 +99,12 @@ if __name__ == '__main__':
     num_add_test_images = len(test)
     test += train[-num_add_test_images:]
     np.random.shuffle(test)
-    train = train[:-num_add_test_images]
+    validation = train[-NUM_VALIDATION_IMAGES-num_add_test_images:
+                       -num_add_test_images]
+    train = train[:-NUM_VALIDATION_IMAGES-num_add_test_images]
 
     json_dict = {'train': train,
+                 'validation': validation,
                  'test': test}
 
     with open(FILE_LIST_FILE, 'w') as json_file:

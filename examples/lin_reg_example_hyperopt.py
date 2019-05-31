@@ -15,8 +15,9 @@ np.random.seed(0)
 
 class LinearDataset(Dataset):
     def __init__(self, observation_space, reco_space, train_len=10000,
-                 test_len=1000):
+                 validation_len=1000, test_len=1000):
         self.train_len = train_len
+        self.validation_len = validation_len
         self.test_len = test_len
         self.observation_space = observation_space
         self.reco_space = reco_space
@@ -24,9 +25,14 @@ class LinearDataset(Dataset):
         self.forward_matrix = np.random.rand(self.shape[0][0],
                                              self.shape[1][0])
 
-    def generator(self, test=False):
-        rs = np.random.RandomState(1 if test else 42)
-        for _ in range(self.test_len if test else self.train_len):
+    def generator(self, part='train'):
+        seed = 42
+        if part == 'validation':
+            seed = 0
+        elif part == 'test':
+            seed = 1
+        rs = np.random.RandomState(seed)
+        for _ in range(self.get_len(part=part)):
             x = rs.rand(self.shape[1][0])
             y = (np.dot(self.forward_matrix, x) +
                  0.4 * rs.normal(scale=.1, size=self.shape[0]))

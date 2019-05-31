@@ -100,14 +100,14 @@ class Reconstructor(ABC):
         self.callback = callback
 
     @abstractmethod
-    def reconstruct(self, observation_data):
+    def reconstruct(self, observation):
         """Reconstruct input data from observation data.
 
         This method must be implemented by subclasses.
 
         Parameters
         ----------
-        observation_data : `observation_space` element
+        observation : `observation_space` element
             The observation data.
 
         Returns
@@ -155,11 +155,10 @@ class FunctionReconstructor(Reconstructor):
         self.fun_args = fun_args or []
         self.fun_kwargs = fun_kwargs or {}
 
-    def reconstruct(self, observation_data):
+    def reconstruct(self, observation):
         if 'callback' in signature(self.function).parameters:
             self.kwargs['callback'] = self.callback
-        return self.function(observation_data, *self.fun_args,
-                             **self.fun_kwargs)
+        return self.function(observation, *self.fun_args, **self.fun_kwargs)
 
 
 class LearnedReconstructor(Reconstructor):
@@ -174,3 +173,26 @@ class LearnedReconstructor(Reconstructor):
         dataset : `Dataset`
             The dataset from which the training data should be used.
         """
+
+    def save_params(self, path):
+        """Save parameters to path.
+
+        Parameters
+        ----------
+        path : str
+            Path at which the parameters should be saved.
+            Implementations should either use it as a file path (w/ or w/o
+            extension) or as a directory path for multiple files (the dir
+            should be created by this method if it does not exist).
+        """
+        raise NotImplementedError
+
+    def load_params(self, path):
+        """Load parameters from path.
+
+        Parameters
+        ----------
+        path : str
+            Path at which the parameters are stored. C.f. `save_params`.
+        """
+        raise NotImplementedError

@@ -73,31 +73,7 @@ class TaskTable:
                 measures = [(measure if isinstance(measure, Measure) else
                              Measure.get_by_short_name(measure))
                             for measure in task['measures']]
-                callbacks = []
-                if reconstructor.callback is not None:
-                    callbacks.append(reconstructor.callback)
                 options = task['options']
-                if save_reconstructions and options.get('save_iterates'):
-                    iterates = []
-                    callback_save_iterates = CallbackStore(
-                        iterates,
-                        step=options.get('save_iterates_step', 1))
-                    callbacks.append(callback_save_iterates)
-                if options.get('save_iterates_measure_values'):
-                    iterates_measure_values = {}
-                    for measure in measures:
-                        iterates_measure_values[measure.short_name] = []
-                        callback_store = CallbackStore(
-                            iterates_measure_values[measure.short_name],
-                            step=options.get('save_iterates_step', 1))
-                        callbacks.append((
-                            callback_store *
-                            measure.as_operator_for_fixed_ground_truth(
-                                test_data.ground_truth)))
-                if len(callbacks) > 0:
-                    reconstructor.callback = callbacks[-1]
-                    for callback in callbacks[-2::-1]:
-                        reconstructor.callback &= callback
 
                 hp_opt = options.get('hyper_param_search')
                 if hp_opt:
@@ -116,25 +92,62 @@ class TaskTable:
                                                     show_progress == 'text'),
                         tqdm_file=orig_stdout,
                         **kwargs)
-                reconstruction = reconstructor.reconstruct(
-                    test_data.observation)
+
+                reconstructions = []
+                if save_reconstructions and options.get('save_iterates'):
+                    iterates = []
+                    if options.get('save_iterates_measure_values'):
+                        iterates_measure_values = {m.short_name: []
+                                                   for m in measures}
+
+                for observation, ground_truth in zip(test_data.observations,
+                                                     test_data.ground_truth):
+                    callbacks = []
+                    if reconstructor.callback is not None:
+                        callbacks.append(reconstructor.callback)
+                    if save_reconstructions and options.get('save_iterates'):
+                        iters = []
+                        iterates.append(iters)
+                        callback_save_iterates = CallbackStore(
+                            iters, step=options.get('save_iterates_step', 1))
+                        callbacks.append(callback_save_iterates)
+                    if options.get('save_iterates_measure_values'):
+                        for measure in measures:
+                            iters_mvs = []
+                            iterates_measure_values[measure.short_name].append(
+                                iters_mvs)
+                            callback_store = CallbackStore(
+                                iters_mvs,
+                                step=options.get('save_iterates_step', 1))
+                            callbacks.append(
+                                callback_store *
+                                measure.as_operator_for_fixed_ground_truth(
+                                    ground_truth))
+                    if len(callbacks) > 0:
+                        reconstructor.callback = callbacks[-1]
+                        for callback in callbacks[-2::-1]:
+                            reconstructor.callback &= callback
+
+                    reconstructions.append(reconstructor.reconstruct(
+                        observation))
 
                 measure_values = {}
                 for measure in measures:
-                    measure_values[measure.short_name] = measure.apply(
-                        reconstruction, test_data.ground_truth)
+                    measure_values[measure.short_name] = [
+                        measure.apply(r, g) for r, g in zip(
+                            reconstructions, test_data.ground_truth)]
                 misc = {}
                 if save_reconstructions and options.get('save_iterates'):
                     misc['iterates'] = iterates
                 if options.get('save_iterates_measure_values'):
                     misc['iterates_measure_values'] = iterates_measure_values
-                row = {'reconstruction': None,
+                row = {'reconstructions': None,
                        'reconstructor': reconstructor,
                        'test_data': test_data,
                        'measure_values': measure_values,
                        'misc': misc}
                 if save_reconstructions:
-                    row['reconstruction'] = reconstruction
+                    row['reconstructions'] = reconstructions
                 row_list.append(row)
         results.results = pd.concat([results.results, pd.DataFrame(row_list)],
                                     ignore_index=True, sort=False)
@@ -255,7 +268,7 @@ class ResultTable:
     ----------
     results : `pandas.DataFrame`
         The results.
-        It has the columns ``'reconstruction'``, ``'reconstructor'``,
+        It has the columns ``'reconstructions'``, ``'reconstructor'``,
         ``'test_data'``, ``'measure_values'`` and ``'misc'``.
     """
     def __init__(self, reconstructions=None, reconstructor=None,
@@ -270,7 +283,7 @@ class ResultTable:
             measure_values = []
         if misc is None:
             misc = []
-        data_dict = {'reconstruction': reconstructions,
+        data_dict = {'reconstructions': reconstructions,
                      'reconstructor': reconstructor,
                      'test_data': test_data,
                      'measure_values': measure_values,
@@ -294,7 +307,7 @@ class ResultTable:
         Raises
         ------
         ValueError
-            If a reconstruction is missing or `index` is not valid.
+            If reconstructions are missing or `index` is not valid.
         """
         if index is None:
             indexes = range(len(self.results))
@@ -307,23 +320,27 @@ class ResultTable:
                              '``None``')
         for i in indexes:
             row = self.results.iloc[i]
-            if row['reconstruction'] is None:
-                raise ValueError('reconstruction missing in row {i}'.format(
+            if row['reconstructions'] is None:
+                raise ValueError('reconstructions missing in row {i}'.format(
                     i=i))
             for measure in measures:
                 if isinstance(measure, str):
                     measure = Measure.get_by_short_name(measure)
-                row['measure_values'][measure.short_name] = measure.apply(
-                    row['reconstruction'], row['test_data'].ground_truth)
+                row['measure_values'][measure.short_name] = [
+                    measure.apply(r, g) for r, g in zip(
+                        row['reconstructions'], row['test_data'].ground_truth)]
 
-    def plot_reconstruction(self, index, plot_ground_truth=True, **kwargs):
+    def plot_reconstruction(self, index, test_index=0,
+                            plot_ground_truth=True, **kwargs):
         """Plot the reconstruction at the specified index.
         Supports only 1d and 2d reconstructions.
 
         Parameters
         ----------
         index : int
-            Index of the reconstruction.
+            Index of the task.
+        test_index : int
+            Index in test data.
         plot_ground_truth : bool, optional
             Whether to show the ground truth next to the reconstruction.
             The default is ``True``.
@@ -337,9 +354,10 @@ class ResultTable:
             The axes the reconstruction was plotted in.
         """
         row = self.results.iloc[index]
-        reconstruction = row.at['reconstruction']
+        reconstruction = row.at['reconstructions'][test_index]
         reconstructor = row.at['reconstructor']
         test_data = row.at['test_data']
+        ground_truth = test_data.ground_truth[test_index]
         if reconstruction is None:
             raise ValueError('reconstruction is ``None``')
         if reconstruction.asarray().ndim > 2:
@@ -350,12 +368,11 @@ class ResultTable:
             ax = plt.subplot()
             ax.plot(x, reconstruction, label=reconstructor.name)
             if plot_ground_truth:
-                ax.plot(x, test_data.ground_truth, label='ground truth')
+                ax.plot(x, ground_truth, label='ground truth')
             ax.legend()
         elif reconstruction.asarray().ndim == 2:
             if plot_ground_truth:
-                _, ax = plot_images([reconstruction, test_data.ground_truth],
-                                    **kwargs)
+                _, ax = plot_images([reconstruction, ground_truth], **kwargs)
                 ax[1].set_title('ground truth')
                 ax = ax[0]
             else:
@@ -423,23 +440,26 @@ class ResultTable:
             if isinstance(measure, str):
                 measure = Measure.get_by_short_name(measure)
             if iterates_measure_values:
-                errors = iterates_measure_values[measure.short_name]
+                errors = np.mean([iters_mvs[measure.short_name] for iters_mvs
+                                  in iterates_measure_values], axis=0)
             else:
-                errors = [measure.apply(x, row['test_data'].ground_truth)
-                          for x in iterates]
+                ground_truth = row['test_data'].ground_truth
+                errors = np.mean([[measure.apply(x, g) for x in iters] for
+                                  iters, g in zip(iterates, ground_truth)],
+                                 axis=0)
             ax_.plot(errors)
             ax_.set_title(measure.short_name)
         return ax
 
     def plot_performance(self, measure, reconstructors=None, test_data=None,
-                         **kwargs):
+                         weighted_average=False, **kwargs):
         """
-        Plot mean measure values for different reconstructors.
+        Plot average measure values for different reconstructors.
         The values have to be computed previously, e.g. by
         `self.apply_measures`.
 
-        The mean is computed over all rows of `self.results` with the specified
-        `test_data` that store the requested `measure` value.
+        The average is computed over all rows of `self.results` with the
+        specified `test_data` that store the requested `measure` value.
 
         Parameters
         ----------
@@ -450,6 +470,11 @@ class ResultTable:
             reconstructors that are found in the results are compared.
         test_data : sequence of `TestData` or `TestData`, optional
             Test data to take into account for computing the mean value.
+        weighted_average : bool, optional
+            Whether to weight the rows according to the number of test data
+            elements.
+            Default: ``False``, i.e. all rows are weighted equally.
+            If ``True``, all test data elements are weighted equally.
 
         Returns
         -------
@@ -472,7 +497,11 @@ class ResultTable:
             r_rows = rows[rows['reconstructor'] == reconstructor]
             values = [mvs[measure.short_name] for mvs in
                       r_rows['measure_values']]
-            v.append(np.mean(values))
+            weights = None
+            if weighted_average:
+                weights = [len(test_data.observations) for test_data in
+                           r_rows['test_data']]
+            v.append(np.average(values, weights=weights))
         fig, ax = plt.subplots(**kwargs)
         ax.bar(range(len(v)), v)
         ax.set_xticks(range(len(v)))

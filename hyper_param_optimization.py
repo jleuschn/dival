@@ -83,9 +83,12 @@ def optimize_hyper_params(reconstructor, test_data, measure, dataset=None,
 
     def fn(x):
         reconstructor.hyper_params.update(x)
-        reconstruction = reconstructor.reconstruct(test_data.observation)
-        loss = loss_sign * measure.apply(reconstruction,
-                                         test_data.ground_truth)
+        reconstructions = [reconstructor.reconstruct(observation) for
+                           observation in test_data.observations]
+        measure_values = [measure.apply(r, g) for r, g
+                          in zip(reconstructions, test_data.ground_truth)]
+        loss = loss_sign * np.mean(measure_values)
+
         return {'status': 'ok',
                 'loss': loss}
 
@@ -98,9 +101,12 @@ def optimize_hyper_params(reconstructor, test_data, measure, dataset=None,
             hyperopt_max_evals=hyperopt_max_evals,
             hyperopt_rstate=hyperopt_rstate, show_progressbar=False)
 
-        reconstruction = reconstructor.reconstruct(test_data.observation)
-        loss = loss_sign * measure.apply(reconstruction,
-                                         test_data.ground_truth)
+        reconstructions = [reconstructor.reconstruct(observation) for
+                           observation in test_data.observations]
+        measure_values = [measure.apply(r, g) for r, g
+                          in zip(reconstructions, test_data.ground_truth)]
+        loss = loss_sign * np.mean(measure_values)
+
         return {'status': 'ok',
                 'loss': loss,
                 'best_sub_hp': best_sub_hp}

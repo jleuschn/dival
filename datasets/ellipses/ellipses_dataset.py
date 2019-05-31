@@ -15,17 +15,18 @@ class EllipsesDataset(GroundTruthDataset):
     def __init__(self):
         self.shape = (128, 128)
         self.len_train = 50000
+        self.len_validation = 5000
         self.len_test = 5000
 
-    def generator(self, test=False, min_pt=None, max_pt=None):
+    def generator(self, part='train', min_pt=None, max_pt=None):
         """Yield random ellipse phantom images of shape (128, 128).
 
         Parameters
         ----------
         min_pt : [int, int], optional
-            Minimum values of the lp space.
+            Minimum values of the lp space. Default: [-64, -64].
         max_pt : [int, int], optional
-            Maximum values of the lp space.
+            Maximum values of the lp space. Default: [64, 64].
         """
         if min_pt is None:
             min_pt = [-self.shape[0]/2, -self.shape[1]/2]
@@ -33,8 +34,13 @@ class EllipsesDataset(GroundTruthDataset):
             max_pt = [self.shape[0]/2, self.shape[1]/2]
         space = uniform_discr(min_pt, max_pt, self.shape, dtype=np.float32)
 
-        r = np.random.RandomState(1 if test else 42)
-        n = self.len_test if test else self.len_train
+        seed = 42
+        if part == 'validation':
+            seed = 0
+        elif part == 'test':
+            seed = 1
+        r = np.random.RandomState(seed)
+        n = self.get_len(part=part)
         n_ellipse = 50
         ellipsoids = np.empty((n_ellipse, 6))
         for _ in range(n):

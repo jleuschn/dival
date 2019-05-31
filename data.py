@@ -1,30 +1,35 @@
 # -*- coding: utf-8 -*-
 class TestData:
     """
-    Bundles an `observation` with a `ground_truth`.
+    Bundles `self.observations` with `self.ground_truth`.
 
     Attributes
     ----------
-    observation : observation space element
+    observations : list of observation space elements
         The observation, possibly distorted or low-dimensional.
-    ground_truth : reconstruction space element
+    ground_truth: list of reconstruction space elements
         The ground truth. May be replaced with a good quality reference.
         Reconstructors will be evaluated by comparing their reconstructions
         with this value. May also be ``None`` if no evaluation based on
         ground truth shall be performed.
     """
-    def __init__(self, observation, ground_truth=None,
-                 name='', description=''):
-        self.observation = observation
+    def __init__(self, observations, ground_truth=None, name='',
+                 description=''):
+        self.observations = observations
+        if not isinstance(self.observations, list):
+            self.observations = [self.observations]
         self.ground_truth = ground_truth
+        if (self.ground_truth is not None and
+                not isinstance(self.ground_truth, list)):
+            self.ground_truth = [self.ground_truth]
         self.name = name
         self.description = description
 
     def __repr__(self):
-        return ("TestData(observation=\n{observation}, "
+        return ("TestData(observations=\n{observations}, "
                 "ground_truth=\n{ground_truth}, name='{name}', "
                 "description='{description}')".format(
-                    observation=self.observation,
+                    observations=self.observations,
                     ground_truth=self.ground_truth,
                     name=self.name,
                     description=self.description))

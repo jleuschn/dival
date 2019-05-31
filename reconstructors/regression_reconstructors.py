@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Provides wrappers for reconstruction methods of odl."""
+import os
+import json
 import numpy as np
 from sklearn.linear_model import Ridge
 from hyperopt import hp
@@ -37,8 +39,8 @@ class LinRegReconstructor(LearnedReconstructor):
         super().__init__(hyper_params=hyper_params, **kwargs)
         self.weights = None
 
-    def reconstruct(self, observation_data):
-        reconstruction = np.dot(self.weights, observation_data)
+    def reconstruct(self, observation):
+        reconstruction = np.dot(self.weights, observation)
         return uniform_discr_element(reconstruction, self.reco_space)
 
     def train(self, dataset):
@@ -62,3 +64,15 @@ class LinRegReconstructor(LearnedReconstructor):
             y[i] = y_i
         ridge.fit(x, y)
         self.weights = ridge.coef_
+
+    def save_params(self, path):
+        if not os.path.isdir(path):
+            os.mkdir(path)
+        np.save(os.path.join(path, 'weights.npy'), self.weights)
+        with open(os.path.join(path, 'hyper_params.json'), 'w') as file:
+            json.dump(self.hyper_params, file, indent=True)
+
+    def load_params(self, path):
+        self.weights = np.load(os.path.join(path, 'weights.npy'))
+        with open(os.path.join(path, 'hyper_params.json'), 'r') as file:
+            self.hyper_params.update(json.load(file))
