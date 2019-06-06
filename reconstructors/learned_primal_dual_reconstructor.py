@@ -9,7 +9,7 @@ class LearnedPrimalDualReconstructor(LearnedReconstructor):
     def __init__(self):
         self.model = Input(shape=(None, None, 1))
         
-    def reconstruct(self, observation_data):
+    def reconstruct(self, observation):
         sess = tf.InteractiveSession()
 
     def train(self, dataset, forward_op=None):

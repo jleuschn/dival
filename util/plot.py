@@ -139,7 +139,7 @@ def plot_images(x_list, nrows=1, ncols=-1, fig=None, vrange='equal',
         cbar = 'one'
     ax = fig.subplots(nrows, ncols)
     if isinstance(ax, plt.Axes):
-        ax = np.array(ax)
+        ax = np.atleast_1d(ax)
     im = np.empty(ax.shape, dtype=object)
     for i, (x, ax_, v) in enumerate(zip(x_list, ax.flat, vrange_)):
         im_, _ = plot_image(x, ax=ax_, vmin=v[0], vmax=v[1], **kwargs)

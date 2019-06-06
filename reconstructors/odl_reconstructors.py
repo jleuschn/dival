@@ -41,10 +41,10 @@ class FBPReconstructor(Reconstructor):
         self.ray_trafo = ray_trafo
         self.padding = padding
 
-    def reconstruct(self, observation_data):
+    def reconstruct(self, observation):
         self.fbp_op = fbp_op(self.ray_trafo, padding=self.padding,
                              **self.hyper_params)
-        reconstruction = self.fbp_op(observation_data)
+        reconstruction = self.fbp_op(observation)
         return reconstruction
 
 
@@ -103,13 +103,13 @@ class CGReconstructor(Reconstructor):
         self.callback = callback
         self.op_is_symmetric = op_is_symmetric
 
-    def reconstruct(self, observation_data):
+    def reconstruct(self, observation):
         x = self.x0.copy()
         if self.op_is_symmetric:
-            iterative.conjugate_gradient(self.op, x, observation_data,
+            iterative.conjugate_gradient(self.op, x, observation,
                                          self.niter, self.callback)
         else:
-            iterative.conjugate_gradient_normal(self.op, x, observation_data,
+            iterative.conjugate_gradient_normal(self.op, x, observation,
                                                 self.niter, self.callback)
         return x
 
@@ -156,12 +156,12 @@ class GaussNewtonReconstructor(Reconstructor):
         self.zero_seq = zero_seq
         self.callback = callback
 
-    def reconstruct(self, observation_data):
+    def reconstruct(self, observation):
         x = self.x0.copy()
         kwargs = {'callback': self.callback}
         if self.zero_seq is not None:
             kwargs['zero_seq'] = self.zero_seq
-        iterative.gauss_newton(self.op, x, observation_data, self.niter,
+        iterative.gauss_newton(self.op, x, observation, self.niter,
                                **kwargs)
         return x
 
@@ -226,9 +226,9 @@ class KaczmarzReconstructor(Reconstructor):
         self.callback = callback
         self.callback_loop = callback_loop
 
-    def reconstruct(self, observation_data):
+    def reconstruct(self, observation):
         x = self.x0.copy()
-        iterative.kaczmarz(self.ops, x, observation_data, self.niter,
+        iterative.kaczmarz(self.ops, x, observation, self.niter,
                            self.omega, self.projection, self.random,
                            self.callback, self.callback_loop)
         return x
@@ -283,9 +283,9 @@ class LandweberReconstructor(Reconstructor):
         self.projection = projection
         self.callback = callback
 
-    def reconstruct(self, observation_data):
+    def reconstruct(self, observation):
         x = self.x0.copy()
-        iterative.landweber(self.op, x, observation_data, self.niter,
+        iterative.landweber(self.op, x, observation, self.niter,
                             self.omega, self.projection, self.callback)
         return x
 
@@ -346,11 +346,11 @@ class MLEMReconstructor(Reconstructor):
         self.callback = callback
         self.sensitivities = sensitivities
 
-    def reconstruct(self, observation_data):
+    def reconstruct(self, observation):
         x = self.x0.copy()
-        if isinstance(observation_data, DiscretizedSpaceElement):
-            observation_data = [observation_data]
-        statistical.osmlem(self.op, x, observation_data, self.niter,
+        if isinstance(observation, DiscretizedSpaceElement):
+            observation = [observation]
+        statistical.osmlem(self.op, x, observation, self.niter,
                            noise=self.noise, callback=self.callback,
                            sensitivities=self.sensitivities)
         return x

@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 """Provides the dataset base classes.
 """
+from itertools import islice
 import numpy as np
+from dival.data import DataPairs
 from dival.util.odl_utility import NoiseOperator
 
 
 class Dataset():
+    def __init__(self, space=None):
+        self.space = space
+
     def generator(self, part='train'):
         """Yield data.
 
@@ -79,6 +84,25 @@ class Dataset():
         except AttributeError:
             raise NotImplementedError
 
+    def get_data_pairs(self, part='train', n=None):
+        """Return full data part as `DataPairs` object.
+
+        Parameters
+        ----------
+        part : {'train', 'validation', 'test'}, optional
+            The data part. Default is ``'train'``.
+        n : int, optional
+            Number of pairs (from the beginning). If ``None``, all available
+            data is used (the default).
+        """
+        gen = self.generator(part=part)
+        observations, ground_truth = [], []
+        for obs, gt in islice(gen, n):
+            observations.append(obs)
+            ground_truth.append(gt)
+        data_pairs = DataPairs(observations, ground_truth)
+        return data_pairs
+
     def create_torch_dataset(self, part='train'):
         import torch
 
@@ -109,7 +133,7 @@ class Dataset():
 
 class ObservationGroundTruthPairDataset(Dataset):
     def __init__(self, ground_truth_gen, forward_op, train_len=None,
-                 validation_len=None, test_len=None, shape=None,
+                 validation_len=None, test_len=None, domain=None,
                  noise_type=None, noise_kwargs=None, noise_seed=None):
         self.ground_truth_gen = ground_truth_gen
         self.forward_op = forward_op
@@ -119,23 +143,22 @@ class ObservationGroundTruthPairDataset(Dataset):
             self.validation_len = validation_len
         if test_len is not None:
             self.test_len = test_len
-        if shape is not None:
-            self.shape = shape
+        if domain is None:
+            domain = self.forward_op.domain
+        self.noise_forward_op = None
         if noise_type is not None:
             noise_random_state = np.random.RandomState(noise_seed)
             noise_op = NoiseOperator(self.forward_op.range, noise_type,
                                      noise_kwargs=noise_kwargs,
                                      random_state=noise_random_state)
-            self.forward_op = noise_op * self.forward_op
+            self.noise_forward_op = noise_op * self.forward_op
+        super().__init__(space=(self.forward_op.range, domain))
+        self.shape = (self.space[0].shape, self.space[1].shape)
 
     def generator(self, part='train'):
         gt_gen_instance = self.ground_truth_gen(part=part)
-        while True:
-            try:
-                ground_truth = next(gt_gen_instance)
-            except StopIteration:
-                break
-            yield (self.forward_op(ground_truth), ground_truth)
+        for ground_truth in gt_gen_instance:
+            yield (self.noise_forward_op(ground_truth), ground_truth)
 
 
 class GroundTruthDataset(Dataset):
@@ -153,13 +176,9 @@ class GroundTruthDataset(Dataset):
             test_len = self.get_test_len()
         except NotImplementedError:
             test_len = None
-        try:
-            shape = (forward_op.range.shape, self.get_shape())
-        except NotImplementedError:
-            shape = None
         dataset = ObservationGroundTruthPairDataset(
             self.generator, forward_op, train_len=train_len,
-            validation_len=validation_len, test_len=test_len, shape=shape,
+            validation_len=validation_len, test_len=test_len,
             noise_type=noise_type, noise_kwargs=noise_kwargs,
             noise_seed=noise_seed)
         return dataset

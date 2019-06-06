@@ -23,17 +23,8 @@ class LIDCIDRIDivalDataset(GroundTruthDataset):
     The values are clipped to [-1024, 3071] HU and normalized into [0., 1.] by
     the formula ``normalized = (original + 1024) / 4096``.
     """
-    def __init__(self):
-        self.shape = (362, 362)
-        with open(FILE_LIST_FILE, 'r') as json_file:
-            self.dcm_files_dict = json.load(json_file)
-        self.train_len = len(self.dcm_files_dict['train'])
-        self.validation_len = len(self.dcm_files_dict['validation'])
-        self.test_len = len(self.dcm_files_dict['test'])
-
-    def generator(self, part='train', min_pt=None, max_pt=None):
-        """Yield selected cropped and normalized LIDC-IDRI images of shape
-        (362, 362).
+    def __init__(self, min_pt=None, max_pt=None):
+        """Construct the ellipses dataset.
 
         Parameters
         ----------
@@ -42,17 +33,27 @@ class LIDCIDRIDivalDataset(GroundTruthDataset):
         max_pt : [int, int], optional
             Maximum values of the lp space. Default: [181, 181].
         """
-        MIN_VAL, MAX_VAL = -1024, 3071
-
+        self.shape = (362, 362)
         if min_pt is None:
             min_pt = [-self.shape[0]/2, -self.shape[1]/2]
         if max_pt is None:
             max_pt = [self.shape[0]/2, self.shape[1]/2]
         space = uniform_discr(min_pt, max_pt, self.shape, dtype=np.float32)
+        with open(FILE_LIST_FILE, 'r') as json_file:
+            self.dcm_files_dict = json.load(json_file)
+        self.train_len = len(self.dcm_files_dict['train'])
+        self.validation_len = len(self.dcm_files_dict['validation'])
+        self.test_len = len(self.dcm_files_dict['test'])
+        super().__init__(space=space)
+
+    def generator(self, part='train'):
+        """Yield selected cropped and normalized LIDC-IDRI images.
+        """
+        MIN_VAL, MAX_VAL = -1024, 3071
 
         seed = 42
         if part == 'validation':
-            seed = 0
+            seed = 2
         elif part == 'test':
             seed = 1
         r = np.random.RandomState(seed)
@@ -75,6 +76,6 @@ class LIDCIDRIDivalDataset(GroundTruthDataset):
             array /= MAX_VAL
             np.clip(array, 0., 1., out=array)
 
-            image = space.element(array)
+            image = self.space.element(array)
 
             yield image

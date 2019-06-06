@@ -9,7 +9,7 @@ from odl.solvers.util.callback import CallbackStore
 from dival.util.plot import plot_image, plot_images
 from dival.util.std_out_err_redirect_tqdm import std_out_err_redirect_tqdm
 from dival.measure import Measure
-from dival.data import TestData
+from dival.data import DataPairs
 from dival import LearnedReconstructor
 from dival.hyper_param_optimization import optimize_hyper_params
 
@@ -77,6 +77,10 @@ class TaskTable:
 
                 hp_opt = options.get('hyper_param_search')
                 if hp_opt:
+                    dataset = task.get('dataset')
+                    validation_data = hp_opt.get('validation_data')
+                    if validation_data is None:
+                        validation_data = dataset.get_data_pairs('validation')
                     kwargs = {}
                     for k in ('hyperopt_max_evals',
                               'hyperopt_max_evals_retrain'):
@@ -84,8 +88,8 @@ class TaskTable:
                         if v is not None:
                             kwargs[k] = v
                     optimize_hyper_params(
-                        reconstructor, test_data, hp_opt['measure'],
-                        dataset=task.get('dataset'),
+                        reconstructor, validation_data, hp_opt['measure'],
+                        dataset=dataset,
                         HYPER_PARAMS_override=hp_opt.get('HYPER_PARAMS'),
                         hyperopt_rstate=hp_opt.get('hyperopt_rstate'),
                         show_progressbar=hp_opt.get('show_progress',
@@ -161,7 +165,7 @@ class TaskTable:
         ----------
         reconstructor : `Reconstructor`
             The reconstructor.
-        test_data : `TestData`
+        test_data : `DataPairs`
             The test data.
         measures : sequence of (`Measure` or str)
             Measures that will be applied. Either `Measure` objects or their
@@ -232,7 +236,7 @@ class TaskTable:
         ----------
         reconstructors : list of `Reconstructor`
             Reconstructor list.
-        test_data : list of `TestData`
+        test_data : list of `DataPairs`
             Test data list.
         measures : sequence of (`Measure` or str)
             Measures that will be applied. The same measures are used for all
@@ -330,7 +334,7 @@ class ResultTable:
                     measure.apply(r, g) for r, g in zip(
                         row['reconstructions'], row['test_data'].ground_truth)]
 
-    def plot_reconstruction(self, index, test_index=0,
+    def plot_reconstruction(self, index, test_index=-1,
                             plot_ground_truth=True, **kwargs):
         """Plot the reconstruction at the specified index.
         Supports only 1d and 2d reconstructions.
@@ -339,8 +343,8 @@ class ResultTable:
         ----------
         index : int
             Index of the task.
-        test_index : int
-            Index in test data.
+        test_index : sequence of int or int, optional
+            Index in test data. If -1, plot all reconstructions (the default).
         plot_ground_truth : bool, optional
             Whether to show the ground truth next to the reconstruction.
             The default is ``True``.
@@ -350,35 +354,49 @@ class ResultTable:
 
         Returns
         -------
-        ax : `matplotlib.axes.Axes`
-            The axes the reconstruction was plotted in.
+        ax_list : list of ndarray of matplotlib.axes.Axes
+            The axes the reconstructions and eventually ground truth were
+            plotted in.
         """
         row = self.results.iloc[index]
-        reconstruction = row.at['reconstructions'][test_index]
-        reconstructor = row.at['reconstructor']
         test_data = row.at['test_data']
-        ground_truth = test_data.ground_truth[test_index]
-        if reconstruction is None:
-            raise ValueError('reconstruction is ``None``')
-        if reconstruction.asarray().ndim > 2:
-            print('only 1d and 2d reconstructions can be plotted (currently)')
-            return
-        if reconstruction.asarray().ndim == 1:
-            x = reconstruction.space.points()
-            ax = plt.subplot()
-            ax.plot(x, reconstruction, label=reconstructor.name)
-            if plot_ground_truth:
-                ax.plot(x, ground_truth, label='ground truth')
-            ax.legend()
-        elif reconstruction.asarray().ndim == 2:
-            if plot_ground_truth:
-                _, ax = plot_images([reconstruction, ground_truth], **kwargs)
-                ax[1].set_title('ground truth')
-                ax = ax[0]
+        reconstructor = row.at['reconstructor']
+        ax_list = []
+        if isinstance(test_index, int):
+            if test_index == -1:
+                test_index = range(len(test_data))
             else:
-                _, ax = plot_image(reconstruction, **kwargs)
-            ax.set_title(reconstructor.name)
-        return ax
+                test_index = [test_index]
+        for i in test_index:
+            title = 'reconstruction for task {index}, test_data[{i}]'.format(
+                index=index, i=i)
+            reconstruction = row.at['reconstructions'][i]
+            ground_truth = test_data.ground_truth[i]
+            if reconstruction is None:
+                raise ValueError('reconstruction is ``None``')
+            if reconstruction.asarray().ndim > 2:
+                print('only 1d and 2d reconstructions can be plotted')
+                return
+            if reconstruction.asarray().ndim == 1:
+                x = reconstruction.space.points()
+                _, ax = plt.subplots()
+                ax.plot(x, reconstruction, label=reconstructor.name)
+                if plot_ground_truth:
+                    ax.plot(x, ground_truth, label='ground truth')
+                ax.legend()
+                ax.set_title(title)
+                ax = np.array(ax)
+            elif reconstruction.asarray().ndim == 2:
+                if plot_ground_truth:
+                    _, ax = plot_images([reconstruction, ground_truth],
+                                        **kwargs)
+                    ax[1].set_title('ground truth')
+                else:
+                    _, ax = plot_image(reconstruction, **kwargs)
+                ax[0].set_title(reconstructor.name)
+                ax[0].figure.suptitle(title)
+            ax_list.append(ax)
+        return ax_list
 
     def plot_all_reconstructions(self, **kwargs):
         """Plot all reconstructions.
@@ -391,13 +409,13 @@ class ResultTable:
         Returns
         -------
         ax : ndarray of `matplotlib.axes.Axes`
-            List of the axes the reconstructions were plotted in.
+            The axes the reconstructions were plotted in.
         """
         ax = []
         for i in range(len(self.results)):
             ax_ = self.plot_reconstruction(i, **kwargs)
             ax.append(ax_)
-        return np.array(ax)
+        return np.vstack(ax)
 
     def plot_convergence(self, index, measures=None, fig_size=None,
                          gridspec_kw=None):
@@ -417,7 +435,7 @@ class ResultTable:
 
         Returns
         -------
-        ax : ndarray of matplotlib.axes.Axes
+        ax : ndarray of `matplotlib.axes.Axes`
             The axes the measure values were plotted in.
         """
         row = self.results.iloc[index]
@@ -468,7 +486,7 @@ class ResultTable:
         reconstructors : sequence of `Reconstructor`, optional
             The reconstructors to compare. If ``None`` (default), all
             reconstructors that are found in the results are compared.
-        test_data : sequence of `TestData` or `TestData`, optional
+        test_data : sequence of `DataPairs` or `DataPairs`, optional
             Test data to take into account for computing the mean value.
         weighted_average : bool, optional
             Whether to weight the rows according to the number of test data
@@ -485,7 +503,7 @@ class ResultTable:
             measure = Measure.get_by_short_name(measure)
         if reconstructors is None:
             reconstructors = self.results['reconstructor'].unique()
-        if isinstance(test_data, TestData):
+        if isinstance(test_data, DataPairs):
             test_data = [test_data]
         mask = [measure.short_name in row['measure_values'].keys() and
                 row['reconstructor'] in reconstructors and

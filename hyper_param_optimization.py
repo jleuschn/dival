@@ -8,7 +8,8 @@ from dival.measure import Measure
 from dival import LearnedReconstructor
 
 
-def optimize_hyper_params(reconstructor, test_data, measure, dataset=None,
+def optimize_hyper_params(reconstructor, validation_data, measure,
+                          dataset=None,
                           HYPER_PARAMS_override=None,
                           hyperopt_max_evals=1000,
                           hyperopt_max_evals_retrain=1000,
@@ -21,7 +22,7 @@ def optimize_hyper_params(reconstructor, test_data, measure, dataset=None,
     ----------
     reconstructor : `Reconstructor`
         The reconstructor.
-    test_data : `TestData`
+    validation_data : `DataPairs`
         The test data on which the performance is measured.
     measure : `Measure` or str
         The measure to use as the objective. The sign is chosen automatically
@@ -84,9 +85,9 @@ def optimize_hyper_params(reconstructor, test_data, measure, dataset=None,
     def fn(x):
         reconstructor.hyper_params.update(x)
         reconstructions = [reconstructor.reconstruct(observation) for
-                           observation in test_data.observations]
-        measure_values = [measure.apply(r, g) for r, g
-                          in zip(reconstructions, test_data.ground_truth)]
+                           observation in validation_data.observations]
+        measure_values = [measure.apply(r, g) for r, g in
+                          zip(reconstructions, validation_data.ground_truth)]
         loss = loss_sign * np.mean(measure_values)
 
         return {'status': 'ok',
@@ -102,9 +103,9 @@ def optimize_hyper_params(reconstructor, test_data, measure, dataset=None,
             hyperopt_rstate=hyperopt_rstate, show_progressbar=False)
 
         reconstructions = [reconstructor.reconstruct(observation) for
-                           observation in test_data.observations]
-        measure_values = [measure.apply(r, g) for r, g
-                          in zip(reconstructions, test_data.ground_truth)]
+                           observation in validation_data.observations]
+        measure_values = [measure.apply(r, g) for r, g in
+                          zip(reconstructions, validation_data.ground_truth)]
         loss = loss_sign * np.mean(measure_values)
 
         return {'status': 'ok',

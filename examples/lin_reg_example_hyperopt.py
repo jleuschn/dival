@@ -1,5 +1,5 @@
 import numpy as np
-from dival.data import TestData
+from dival.data import DataPairs
 from dival.datasets.dataset import Dataset
 from dival.evaluation import TaskTable
 from dival.measure import L2
@@ -28,7 +28,7 @@ class LinearDataset(Dataset):
     def generator(self, part='train'):
         seed = 42
         if part == 'validation':
-            seed = 0
+            seed = 2
         elif part == 'test':
             seed = 1
         rs = np.random.RandomState(seed)
@@ -41,9 +41,7 @@ class LinearDataset(Dataset):
 
 
 dataset = LinearDataset(observation_space, reco_space)
-test_generator = dataset.get_test_generator()
-observation, ground_truth = next(test_generator)
-test_data = TestData(observation, ground_truth)
+test_data = dataset.get_data_pairs('test')
 
 # %% task table and reconstructors
 eval_tt = TaskTable()
@@ -64,4 +62,5 @@ results = eval_tt.run()
 print(results.to_string(formatters={'reconstructor': lambda r: r.name}))
 
 # %% plot reconstructions
-fig = results.plot_all_reconstructions(fig_size=(9, 4), vrange='individual')
+fig = results.plot_all_reconstructions(test_index=range(3),
+                                       fig_size=(9, 4), vrange='individual')

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-class TestData:
+class DataPairs:
     """
     Bundles `self.observations` with `self.ground_truth`.
 
@@ -7,11 +7,9 @@ class TestData:
     ----------
     observations : list of observation space elements
         The observation, possibly distorted or low-dimensional.
-    ground_truth: list of reconstruction space elements
-        The ground truth. May be replaced with a good quality reference.
-        Reconstructors will be evaluated by comparing their reconstructions
-        with this value. May also be ``None`` if no evaluation based on
-        ground truth shall be performed.
+    ground_truth: list of reconstruction space elements or ``None``
+        The ground truth. May be replaced with a good quality reference. May
+        also be ``None``.
     """
     def __init__(self, observations, ground_truth=None, name='',
                  description=''):
@@ -26,7 +24,7 @@ class TestData:
         self.description = description
 
     def __repr__(self):
-        return ("TestData(observations=\n{observations}, "
+        return ("DataPairs(observations=\n{observations}, "
                 "ground_truth=\n{ground_truth}, name='{name}', "
                 "description='{description}')".format(
                     observations=self.observations,
@@ -35,5 +33,8 @@ class TestData:
                     description=self.description))
 
     def __str__(self):
-        return ("TestData('{name}')".format(name=self.name) if self.name
+        return ("DataPairs('{name}')".format(name=self.name) if self.name
                 else self.__repr__())
+
+    def __len__(self):
+        return len(self.observations)

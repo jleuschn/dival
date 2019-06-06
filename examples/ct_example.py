@@ -1,6 +1,6 @@
 import numpy as np
 import odl
-from dival.data import TestData
+from dival.data import DataPairs
 from dival.evaluation import TaskTable
 from dival.measure import L2, PSNR, SSIM
 from dival.reconstructors.odl_reconstructors import (FBPReconstructor,
@@ -23,7 +23,7 @@ ray_trafo = odl.tomo.RayTransform(reco_space, geometry)
 proj_data = ray_trafo(phantom)
 observation = proj_data + np.random.poisson(0.3, proj_data.shape)
 
-test_data = TestData(observation, ground_truth, name='shepp_logan + gaussian')
+test_data = DataPairs(observation, ground_truth, name='shepp_logan + gaussian')
 
 # %% task table and reconstructors
 eval_tt = TaskTable()
