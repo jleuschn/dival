@@ -1,5 +1,4 @@
 import numpy as np
-from dival.data import DataPairs
 from dival.datasets.dataset import Dataset
 from dival.evaluation import TaskTable
 from dival.measure import L2

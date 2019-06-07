@@ -12,6 +12,14 @@ dival.datasets.dataset module
     :undoc-members:
     :show-inheritance:
 
+dival.datasets.standard module
+------------------------------
+
+.. automodule:: dival.datasets.standard
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 
 Module contents
 ---------------
