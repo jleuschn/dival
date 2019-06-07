@@ -1,0 +1,5 @@
+docs:
+  script:
+   - cd docs/
+   - make apidoc
+   - make html
