@@ -1,8 +1,4 @@
 docs:
   script:
-  - apk --no-cache add py2-pip python-dev
-  - pip install sphinx
-  - apk --no-cache add make
   - cd docs/
-  - make apidoc
   - make html
