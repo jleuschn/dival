@@ -1,4 +1,0 @@
-docs:
-  script:
-  - cd docs/
-  - make html
