@@ -1,4 +1,4 @@
-from util.odl_utility import uniform_discr_element
+from dival.util.odl_utility import uniform_discr_element
 from dival.data import DataPairs
 from dival.evaluation import TaskTable
 from dival.measure import L2, PSNR

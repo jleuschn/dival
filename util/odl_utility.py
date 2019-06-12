@@ -45,7 +45,7 @@ def apply_noise(x, noise_type, noise_kwargs=None, seed=None,
         Keyword arguments to be passed to the noise function, e.g. ``'stddev'``
         for ``'white'`` noise.
         The arguments are:
-            
+
             * ``'white'`` noise:
                 * ``'stddev'``: float, optional
                     Standard deviation of each component of the normal
@@ -54,21 +54,11 @@ def apply_noise(x, noise_type, noise_kwargs=None, seed=None,
                     Whether to multiply ``'stddev'`` with ``mean(abs(x))``.
                     Default is ``False``.
             * ``'poisson'`` noise:
-                * ``'neg_exp_factor'``: float, optional
-                    If specified, the intensity ``exp(-neg_exp_factor * x)`` is
-                    used. Default is ``None``.
                 * ``'scaling_factor'``: float, optional
                     If specified, the intensity is multiplied and the samples
                     from the poisson distribution are divided by this factor:
-                    ``poisson(intensity * scaling_factor) / scaling_factor``.
+                    ``poisson(x * scaling_factor) / scaling_factor``.
                     Default is ``None``.
-                * ``'intensity'``: odl element, optional
-                    The intensity (lambda) for the poisson distribution.
-                    This field is ignored if a ``'neg_exp_factor'`` is
-                    specified. Note that if this field is specified, `x` is
-                    replaced by poisson samples from the distribution with the
-                    specified intensity (where the previous value of `x` is not
-                    taken into account). Default is ``None``.
     seed : int, optional
         Random seed passed to the noise function.
     random_state : `np.random.RandomState`, optional
@@ -89,27 +79,35 @@ def apply_noise(x, noise_type, noise_kwargs=None, seed=None,
         noise = uniform_noise(x.space, **n_kwargs)
         x += noise
     elif noise_type == 'poisson':
-        neg_exp_factor = n_kwargs.pop('neg_exp_factor', None)
-        if neg_exp_factor is None:
-            intensity = n_kwargs.pop('intensity', None)
-            if intensity is None:
-                raise ValueError("noise_kwargs must contain either "
-                                 "'intensity' or 'neg_exp_factor' for "
-                                 "noise_type='poisson'.")
-        else:
-            intensity = np.exp((-neg_exp_factor) * x)
         scaling_factor = n_kwargs.pop('scaling_factor', None)
         if scaling_factor:
-            x.assign(poisson_noise(intensity * scaling_factor, **n_kwargs) /
+            x.assign(poisson_noise(x * scaling_factor, **n_kwargs) /
                      scaling_factor)
         else:
-            x.assign(poisson_noise(intensity, **n_kwargs))
+            x.assign(poisson_noise(x, **n_kwargs))
     elif noise_type == 'salt_pepper':
         noise = salt_pepper_noise(x.domain, **n_kwargs)
         x += noise
     else:
         raise ValueError("unknown noise type '{}'".format(noise_type))
 
+
+class ExpOperator(Operator):
+    def _call(self, x, out):
+        np.exp(x, out=out)
+
+    @property
+    def inverse(self):
+        return LogOperator(self.range, self.domain)
+
+
+class LogOperator(Operator):
+    def _call(self, x, out):
+        np.log(x, out=out)
+
+    @property
+    def inverse(self):
+        return ExpOperator(self.range, self.domain)
 
 
 class NoiseOperator(Operator):
