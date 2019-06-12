@@ -26,7 +26,8 @@ class FBPReconstructor(Reconstructor):
     fbp_op : `odl.operator.Operator`
         The operator applying filtered back-projection.
     """
-    def __init__(self, ray_trafo, padding=True, hyper_params=None, **kwargs):
+    def __init__(self, ray_trafo, padding=True, hyper_params=None,
+                 post_processor=None, **kwargs):
         """Construct an FBP reconstructor.
 
         Parameters
@@ -36,15 +37,21 @@ class FBPReconstructor(Reconstructor):
         padding : bool, optional
             Whether to use padding (the default is ``True``).
             See `odl.tomo.fbp_op` for details.
+        post_processor : callable, optional
+            Callable that takes the filtered backprojection and returns the
+            final reconstruction.
         """
         super().__init__(hyper_params=hyper_params, **kwargs)
         self.ray_trafo = ray_trafo
         self.padding = padding
+        self.post_processor = post_processor
 
     def reconstruct(self, observation):
         self.fbp_op = fbp_op(self.ray_trafo, padding=self.padding,
                              **self.hyper_params)
         reconstruction = self.fbp_op(observation)
+        if self.post_processor is not None:
+            reconstruction = self.post_processor(reconstruction)
         return reconstruction
 
 
