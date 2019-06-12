@@ -11,6 +11,50 @@ from dival.datasets.lidc_idri_dival.lidc_idri_dival_dataset import (
 
 
 def get_standard_dataset(name):
+    """
+    Return a standard dataset by name.
+
+    The datasets are:
+
+        * ``'ellipses'``
+            A typical synthetical CT dataset with ellipse phantoms.
+            `EllipsesDataset` is used as ground truth dataset, a ray
+            transform with parallel beam geometry using 30 angles is applied,
+            and white gaussian noise with a standard deviation of 5% (i.e.
+            ``0.05 * mean(abs(observation))``) is added.
+            The ray transform is stored in the attribute `ray_trafo` of the
+            dataset.
+        * ``'lidc_idri_dival'``
+            A dataset based on real CT reconstructions from the LIDC-IDRI
+            dataset.
+            `LIDCIDRIDivalDataset` is used as ground truth dataset and a ray
+            transform with parallel beam geometry using 30 angles is applied,
+            followed by ``exp(-mu * observation)`` due to Beer-Lamberts law,
+            where ``mu = 0.02 cm^2/g`` (mass attenuation of water).
+            The noise is chosen in the way presented in [1]_ for the human
+            dataset: poisson noise corresponding to 10^4 incident photons per
+            pixel before attenuation is used.
+            The ray transform is stored in the attribute `ray_trafo` of the
+            dataset. The deterministic pre- and postprocessing operators
+            applied before and after the ray transform are stored in the
+            attributes `preprocessing_op` and `postprocessing_op` of the
+            dataset, which also implement the respective inverses.
+
+    References
+    ----------
+    .. [1] Adler, J., & Öktem, O. (2018). Learned Primal-Dual Reconstruction.
+        IEEE Transactions on Medical Imaging, 37, 1322-1332.
+
+    Parameters
+    ----------
+    name : str
+        Name of the dataset.
+
+    Returns
+    -------
+    dataset : `ObservationGroundTruthDataset`
+        The dataset.
+    """
     if name == 'ellipses':
         ellipses_dataset = EllipsesDataset()
         space = ellipses_dataset.space
