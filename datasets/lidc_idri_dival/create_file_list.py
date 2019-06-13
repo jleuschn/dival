@@ -10,7 +10,8 @@ from pydicom.filereader import dcmread
 np.random.seed(1)
 
 DATA_PATH = '/localdata/LIDC-IDRI'
-FILE_LIST_FILE = 'lidc_idri_file_list.json'
+FILE_LIST_FILE = os.path.join(os.path.dirname(__file__),
+                              'lidc_idri_file_list.json')
 
 # directories with scans that are not valid in the rectangle to which they are
 # cropped (used as a blacklist)

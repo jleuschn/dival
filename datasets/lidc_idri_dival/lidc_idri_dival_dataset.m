@@ -4,7 +4,7 @@ if nargin >= 1
 else
   part = 'train';
 end
-PATH = '/localdata/data/LIDC-IDRI/';
+PATH = '/localdata/LIDC-IDRI/';
 FILE_LIST_FILE = ['/home/jleuschn/phd/dival/datasets/lidc_idri_dival/'...
                   'lidc_idri_file_list.json'];
 file_list = jsondecode(fileread(FILE_LIST_FILE));

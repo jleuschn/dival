@@ -49,5 +49,5 @@ def download_images(path, file_list_file=FILE_LIST_FILE,
 
 
 if __name__ == '__main__':
-    PATH = '/localdata/data/lidc_idri_dival/'
+    PATH = '/localdata/lidc_idri_dival/'
     download_images(PATH)

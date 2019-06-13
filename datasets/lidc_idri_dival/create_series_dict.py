@@ -6,11 +6,11 @@ from pydicom.filereader import dcmread
 from create_file_list import get_dirs
 
 
-DATA_PATH = '/localdata/data/LIDC-IDRI'
-FILE_LIST_FILE = ('/home/jleuschn/phd/dival/datasets/lidc_idri_dival/'
-                  'lidc_idri_file_list.json')
-SERIES_DICT_FILE = ('/home/jleuschn/phd/dival/datasets/lidc_idri_dival/'
-                    'lidc_idri_series_dict.json')
+DATA_PATH = '/localdata/LIDC-IDRI'
+FILE_LIST_FILE = os.path.join(os.path.dirname(__file__),
+                              'lidc_idri_file_list.json')
+SERIES_DICT_FILE = os.path.join(os.path.dirname(__file__),
+                                'lidc_idri_series_dict.json')
 
 with open(FILE_LIST_FILE, 'r') as json_file:
     file_dict = json.load(json_file)
