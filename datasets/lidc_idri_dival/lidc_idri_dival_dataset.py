@@ -7,7 +7,15 @@ from pydicom.filereader import dcmread
 from odl.discr.lp_discr import uniform_discr
 from dival.datasets.dataset import GroundTruthDataset
 
+# path to LIDC-IDRI, you may need to adjust this
+# The public LIDC-IDRI dataset can be downloaded using either the
+# NBIA Data Retriever or download_images.py.
 DATA_PATH = '/localdata/LIDC-IDRI'
+
+if not os.path.isdir(DATA_PATH):
+    raise FileNotFoundError('LIDC-IDRI dataset not found: directory "{}" does '
+                            'not exist'.format(DATA_PATH))
+
 FILE_LIST_FILE = os.path.join(os.path.dirname(__file__),
                               'lidc_idri_file_list.json')
 

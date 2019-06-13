@@ -49,5 +49,7 @@ def download_images(path, file_list_file=FILE_LIST_FILE,
 
 
 if __name__ == '__main__':
-    PATH = '/localdata/lidc_idri_dival/'
-    download_images(PATH)
+    DATA_PATH = '/localdata/LIDC-IDRI/'  # path to download LIDC-IDRI images to
+    # see also lidc_idri_dival_dataset.py, when adjusting DATA_PATH here,
+    # you most likely also want to update it there, too
+    download_images(DATA_PATH)
