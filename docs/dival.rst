@@ -13,38 +13,12 @@ Subpackages
 Submodules
 ----------
 
-dival.data module
------------------
+.. toctree::
 
-.. automodule:: dival.data
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-dival.evaluation module
------------------------
-
-.. automodule:: dival.evaluation
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-dival.hyper\_param\_optimization module
----------------------------------------
-
-.. automodule:: dival.hyper_param_optimization
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-dival.measure module
---------------------
-
-.. automodule:: dival.measure
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
+   dival.data
+   dival.evaluation
+   dival.hyper_param_optimization
+   dival.measure
 
 Module contents
 ---------------

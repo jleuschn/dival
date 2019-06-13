@@ -5,10 +5,10 @@ This is the documentation of DIVal, a library for testing and comparing deep
 learning based methods for inverse problems written in python.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
    
-   modules
+   dival
    
 
 Indices and tables

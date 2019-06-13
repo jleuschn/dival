@@ -83,7 +83,7 @@ def get_standard_dataset(name):
         ray_trafo = odl.tomo.RayTransform(space, geometry)
 
         # Ensure operator has fixed operator norm for scale invariance
-        opnorm = odl.power_method_opnorm(ray_trafo)
+#        opnorm = odl.power_method_opnorm(ray_trafo)
 #        operator = (1 / opnorm) * ray_trafo
 
 #        noise model taken from Adler, J. and Öktem, O., 2018, Learned

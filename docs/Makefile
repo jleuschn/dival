@@ -18,7 +18,7 @@ help:
 .PHONY: help Makefile
 
 apidoc:
-	@sphinx-apidoc -f -o "$(SOURCEDIR)" $(EXCLUDE)
+	@sphinx-apidoc -f -e -o "$(SOURCEDIR)" $(EXCLUDE)
 
 install:
 	@cp -r "$(BUILDDIR)/html/." "$(INSTALLDIR)"

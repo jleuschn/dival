@@ -4,22 +4,10 @@ dival.datasets package
 Submodules
 ----------
 
-dival.datasets.dataset module
------------------------------
+.. toctree::
 
-.. automodule:: dival.datasets.dataset
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-dival.datasets.standard module
-------------------------------
-
-.. automodule:: dival.datasets.standard
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
+   dival.datasets.dataset
+   dival.datasets.standard
 
 Module contents
 ---------------
