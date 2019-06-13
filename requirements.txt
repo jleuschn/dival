@@ -1,0 +1,9 @@
+numpy>=1.10
+pandas
+odl
+scikit-image
+scikit-learn
+hyperopt
+pydicom
+tqdm
+matplotlib
