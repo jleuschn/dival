@@ -25,7 +25,8 @@ def get_standard_dataset(name):
             The ray transform is stored in the attribute `ray_trafo` of the
             dataset.
         * ``'lidc_idri_dival'``
-            A dataset based on real CT reconstructions from the LIDC-IDRI
+            A dataset based on real CT reconstructions from the `LIDC-IDRI
+            <https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI>`_
             dataset.
             `LIDCIDRIDivalDataset` is used as ground truth dataset and a ray
             transform with parallel beam geometry using 30 angles is applied,
