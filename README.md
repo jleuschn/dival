@@ -24,8 +24,8 @@ used. They must be stored in a directory, that can be configured by editing
 ``config.json`` (under package root). If you have not downloaded the data yet,
 there are two options:
 
-1. use the [NBIA Data Retriever](https://wiki.cancerimagingarchive.net/display
-   /NBIA/Downloading+the+NBIA+Data+Retriever+7.0) (requires free user login)
+1. use the [NBIA Data Retriever](https://wiki.cancerimagingarchive.net/display/NBIA/Downloading+the+NBIA+Data+Retriever+7.0)
+   (requires free user login)
 2. run the script ``datasets/lidc_idri_dival/download_images.py``
 
 The script will only store the files that are used by the ``'lidc_idri_dival'``
