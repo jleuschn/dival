@@ -6,10 +6,12 @@ import os
 import json
 import numpy as np
 from pydicom.filereader import dcmread
+from dival.config import CONFIG
 
 np.random.seed(1)
 
-DATA_PATH = '/localdata/LIDC-IDRI'
+
+DATA_PATH = CONFIG['lidc_idri_dival']['data_path']
 FILE_LIST_FILE = os.path.join(os.path.dirname(__file__),
                               'lidc_idri_file_list.json')
 

@@ -4,6 +4,7 @@ import json
 from tqdm import tqdm
 from zipfile import ZipFile
 from tciaclient import TCIAClient
+from dival.config import CONFIG
 
 FILE_LIST_FILE = os.path.join(os.path.dirname(__file__),
                               'lidc_idri_file_list.json')
@@ -49,7 +50,6 @@ def download_images(path, file_list_file=FILE_LIST_FILE,
 
 
 if __name__ == '__main__':
-    DATA_PATH = '/localdata/LIDC-IDRI/'  # path to download LIDC-IDRI images to
-    # see also lidc_idri_dival_dataset.py, when adjusting DATA_PATH here,
-    # you most likely also want to update it there, too
+    DATA_PATH = CONFIG['lidc_idri_dival']['data_path']  # path to store the
+#    relevant LIDC-IDRI images. See also lidc_idri_dival_dataset.py.
     download_images(DATA_PATH)

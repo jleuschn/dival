@@ -6,15 +6,24 @@ import numpy as np
 from pydicom.filereader import dcmread
 from odl.discr.lp_discr import uniform_discr
 from dival.datasets.dataset import GroundTruthDataset
+from dival.config import CONFIG
 
-# path to LIDC-IDRI, you may need to adjust this
+# path to LIDC-IDRI
 # The public LIDC-IDRI dataset can be downloaded using either the
 # NBIA Data Retriever or download_images.py.
-DATA_PATH = '/localdata/LIDC-IDRI'
+DATA_PATH = CONFIG['lidc_idri_dival']['data_path']
 
 if not os.path.isdir(DATA_PATH):
-    raise FileNotFoundError('LIDC-IDRI dataset not found: directory "{}" does '
-                            'not exist'.format(DATA_PATH))
+    raise FileNotFoundError(
+        'LIDC-IDRI dataset not found: directory "{}" does not exist. You may '
+        'need to edit "config.json" (setting "lidc_idri_dival"/"data_path") '
+        'and reload dival. The required parts of the LIDC-IDRI dataset must '
+        'be stored under this directory. The data can be downloaded either '
+        'using the NBIA Data Retriever or by running "datasets/lidc_idri_dival'
+        '/download_images.py". Caution: The full dataset is ~135GB, the '
+        'required parts that will be stored by download_images.py are still '
+        '~30GB. Please make sure there is enough free space.'
+        .format(DATA_PATH))
 
 FILE_LIST_FILE = os.path.join(os.path.dirname(__file__),
                               'lidc_idri_file_list.json')

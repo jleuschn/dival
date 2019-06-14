@@ -4,9 +4,10 @@ import json
 from tqdm import tqdm
 from pydicom.filereader import dcmread
 from create_file_list import get_dirs
+from dival.config import CONFIG
 
 
-DATA_PATH = '/localdata/LIDC-IDRI'
+DATA_PATH = CONFIG['lidc_idri_dival']['data_path']
 FILE_LIST_FILE = os.path.join(os.path.dirname(__file__),
                               'lidc_idri_file_list.json')
 SERIES_DICT_FILE = os.path.join(os.path.dirname(__file__),
