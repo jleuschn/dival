@@ -20,9 +20,13 @@ These datasets can be accessed by calling ``dival.get_standard_dataset(name)``.
 ### Downloading LIDC-IDRI images
 For the real CT dataset ``'lidc_idri_dival'`` images from the [LIDC-IDRI](
 https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI) dataset are
-used. They must be stored in a directory, that can be configured by editing
-``config.json`` (under package root). If you have not downloaded the data yet,
-there are two options:
+used. They must be stored in a directory, which by default is
+``/localdata/LIDC-IDRI``, but can be configured by either editing the source
+code ``config.py`` or the configuration file ``config.json``, which is stored
+at a platform-dependent location (``~/.config/dival/config.json`` on linux,
+e.g.).
+
+If you have not downloaded the data yet, you can do so using one of these ways:
 
 1. use the [NBIA Data Retriever](https://wiki.cancerimagingarchive.net/display/NBIA/Downloading+the+NBIA+Data+Retriever+7.0)
    (requires free user login)
