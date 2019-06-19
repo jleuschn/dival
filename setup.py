@@ -9,4 +9,15 @@ setup(name='dival',
       author_email='jleuschn@uni-bremen.de',
       license='MIT',
       packages=find_packages(),
+      install_requires=[
+          'numpy>=1.10',
+          'pandas',
+          'odl',
+          'scikit-image',
+          'scikit-learn',
+          'hyperopt',
+          'pydicom',
+          'tqdm',
+          'matplotlib'
+      ],
       zip_safe=False)
