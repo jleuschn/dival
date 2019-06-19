@@ -15,6 +15,7 @@ Submodules
 
 .. toctree::
 
+   dival.config
    dival.data
    dival.evaluation
    dival.hyper_param_optimization

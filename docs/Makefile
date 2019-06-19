@@ -8,8 +8,8 @@ SOURCEDIR     = .
 BUILDDIR      = _build
 INSTALLDIR    = ../../docs.dival
 
-EXCLUDE = .. ../examples
-EXCLUDE += $(shell git ls-files -z --others --exclude-standard .. | xargs -0)
+EXCLUDE = ../dival ../dival/examples
+EXCLUDE += $(shell git ls-files -z --others --exclude-standard ../dival | xargs -0)
 
 # Put it first so that "make" without argument is like "make help".
 help:
