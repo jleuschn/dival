@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
 """Provides standard datasets for benchmarking.
 """
+from warnings import warn
 import odl
 from odl.operator.default_ops import ScalingOperator
 from odl.operator.operator import OperatorComp
 from dival.util.odl_utility import ExpOperator
 from dival.datasets.ellipses.ellipses_dataset import EllipsesDataset
-from dival.datasets.lidc_idri_dival.lidc_idri_dival_dataset import (
-    LIDCIDRIDivalDataset)
+try:
+    from dival.datasets.lidc_idri_dival.lidc_idri_dival_dataset import (
+        LIDCIDRIDivalDataset)
+except FileNotFoundError as e:
+    warn('could not import LIDCIDRIDivalDataset because of the following '
+         'error:\n\n{}\n'.format(e))
 
 
 def get_standard_dataset(name):
