@@ -8,7 +8,14 @@ SOURCEDIR     = .
 BUILDDIR      = _build
 INSTALLDIR    = ../../docs.dival
 
-EXCLUDE = ../dival ../dival/examples
+EXCLUDE = ../dival ../dival/examples \
+          ../dival/datasets/lidc_idri_dival/create_file_list.py \
+          ../dival/datasets/lidc_idri_dival/create_series_dict.py \
+          ../dival/datasets/lidc_idri_dival/create_uid_list.py \
+          ../dival/datasets/lidc_idri_dival/download_images.py \
+          ../dival/datasets/lidc_idri_dival/download_images_single.py \
+          ../dival/datasets/lidc_idri_dival/loop_over_ct_dirs.py \
+          ../dival/datasets/lidc_idri_dival/tciaclient.py
 EXCLUDE += $(shell git ls-files -z --others --exclude-standard ../dival | xargs -0)
 
 # Put it first so that "make" without argument is like "make help".

@@ -1,24 +1,19 @@
-import numpy as np
 from dival.evaluation import TaskTable
 from dival.measure import L2, PSNR, SSIM
 from dival.reconstructors.odl_reconstructors import FBPReconstructor
 from dival.datasets.standard import get_standard_dataset
 
-np.random.seed(0)
-
 # %% data
 dataset = get_standard_dataset('lidc_idri_dival')
 ray_trafo = dataset.ray_trafo
-forward_op = dataset.forward_op
 reco_space = ray_trafo.domain
-test_data = dataset.get_data_pairs('test', 1)
+test_data = dataset.get_data_pairs('test', 2)
 
 # %% task table and reconstructors
 eval_tt = TaskTable()
 
 fbp_reconstructor = FBPReconstructor(
-    ray_trafo, pre_processor=dataset.postprocessing_op.inverse,
-    post_processor=dataset.preprocessing_op.inverse, hyper_params={
+    ray_trafo, hyper_params={
         'filter_type': 'Hann',
         'frequency_scaling': 0.8})
 

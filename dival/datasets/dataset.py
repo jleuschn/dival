@@ -132,11 +132,13 @@ class Dataset():
 
 
 class ObservationGroundTruthPairDataset(Dataset):
-    def __init__(self, ground_truth_gen, forward_op, train_len=None,
-                 validation_len=None, test_len=None, domain=None,
-                 noise_type=None, noise_kwargs=None, noise_seed=None):
+    def __init__(self, ground_truth_gen, forward_op, post_processor=None,
+                 train_len=None, validation_len=None, test_len=None,
+                 domain=None, noise_type=None, noise_kwargs=None,
+                 noise_seeds=None):
         self.ground_truth_gen = ground_truth_gen
         self.forward_op = forward_op
+        self.post_processor = post_processor
         if train_len is not None:
             self.train_len = train_len
         if validation_len is not None:
@@ -145,25 +147,32 @@ class ObservationGroundTruthPairDataset(Dataset):
             self.test_len = test_len
         if domain is None:
             domain = self.forward_op.domain
-        self.noise_forward_op = None
-        if noise_type is not None:
-            noise_random_state = np.random.RandomState(noise_seed)
-            noise_op = NoiseOperator(self.forward_op.range, noise_type,
-                                     noise_kwargs=noise_kwargs,
-                                     random_state=noise_random_state)
-            self.noise_forward_op = noise_op * self.forward_op
+        self.noise_type = noise_type
+        self.noise_kwargs = noise_kwargs
+        self.noise_seeds = noise_seeds or {}
         super().__init__(space=(self.forward_op.range, domain))
         self.shape = (self.space[0].shape, self.space[1].shape)
 
     def generator(self, part='train'):
         gt_gen_instance = self.ground_truth_gen(part=part)
+        if self.noise_type is not None:
+            random_state = np.random.RandomState(self.noise_seeds.get(part))
+            noise_op = NoiseOperator(self.forward_op.range, self.noise_type,
+                                     noise_kwargs=self.noise_kwargs,
+                                     random_state=random_state)
+            full_op = noise_op * self.forward_op
+        else:
+            full_op = self.forward_op
+        if self.post_processor is not None:
+            full_op = self.post_processor * full_op
         for ground_truth in gt_gen_instance:
-            yield (self.noise_forward_op(ground_truth), ground_truth)
+            yield (full_op(ground_truth), ground_truth)
 
 
 class GroundTruthDataset(Dataset):
-    def create_pair_dataset(self, forward_op, noise_type=None,
-                            noise_kwargs=None, noise_seed=None):
+    def create_pair_dataset(self, forward_op, post_processor=None,
+                            noise_type=None, noise_kwargs=None,
+                            noise_seeds=None):
         try:
             train_len = self.get_train_len()
         except NotImplementedError:
@@ -177,8 +186,8 @@ class GroundTruthDataset(Dataset):
         except NotImplementedError:
             test_len = None
         dataset = ObservationGroundTruthPairDataset(
-            self.generator, forward_op, train_len=train_len,
-            validation_len=validation_len, test_len=test_len,
-            noise_type=noise_type, noise_kwargs=noise_kwargs,
-            noise_seed=noise_seed)
+            self.generator, forward_op, post_processor=post_processor,
+            train_len=train_len, validation_len=validation_len,
+            test_len=test_len, noise_type=noise_type,
+            noise_kwargs=noise_kwargs, noise_seeds=noise_seeds)
         return dataset

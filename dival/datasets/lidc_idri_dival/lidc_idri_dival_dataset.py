@@ -7,6 +7,7 @@ from pydicom.filereader import dcmread
 from odl.discr.lp_discr import uniform_discr
 from dival.datasets.dataset import GroundTruthDataset
 from dival.config import CONFIG
+from dival.util.constants import MU_WATER, MU_AIR, MU_MAX
 
 # path to LIDC-IDRI
 # The public LIDC-IDRI dataset can be downloaded using either the
@@ -39,23 +40,30 @@ class LIDCIDRIDivalDataset(GroundTruthDataset):
     Each image is cropped to the centered rectangle of shape (362, 362).
     The values are clipped to [-1024, 3071] HU and optionally (by default)
     normalized into [0., 1.] by the formula
-    ``normalized = (original + 1024) / 4096``.
+    ``normalized = (original + 1024) / 4095``.
     """
-    def __init__(self, normalize=True, min_pt=None, max_pt=None):
+    def __init__(self, min_pt=None, max_pt=None, return_val='mu_normed'):
         """Construct the ellipses dataset.
 
         Parameters
         ----------
-        normalize : bool, optional
-            Whether to normalize the values into [0, 1].
-            Default: ``True``.
-            If ``False``, the values are in HU and lie in [-1024, 3072].
+        return_val : str, optional
+            Values to return. Options are
+
+                ``'mu_normed'``
+                    Normalized linear attenuation, values are in [0, 1].
+                ``'mu'``
+                    Linear attenuation in m^-1, values are in ~[-0.46, 81.4].
+                ``'hu'``
+                    Values in Hounsfield unit in [-1024, 3071].
+
+            The default is ``'mu_normed'``.
         min_pt : [int, int], optional
             Minimum values of the lp space. Default: [-181, -181].
         max_pt : [int, int], optional
             Maximum values of the lp space. Default: [181, 181].
         """
-        self.normalize = normalize
+        self.return_val = return_val
         self.shape = (362, 362)
         if min_pt is None:
             min_pt = [-self.shape[0]/2, -self.shape[1]/2]
@@ -72,8 +80,6 @@ class LIDCIDRIDivalDataset(GroundTruthDataset):
     def generator(self, part='train'):
         """Yield selected cropped and normalized LIDC-IDRI images.
         """
-        MIN_VAL, MAX_VAL = -1024, 3071
-
         seed = 42
         if part == 'validation':
             seed = 2
@@ -94,13 +100,15 @@ class LIDCIDRIDivalDataset(GroundTruthDataset):
             # add noise to get continuous values from discrete ones
             array += r.uniform(0., 1., size=array.shape)
 
-            # normalize
-            if self.normalize:
-                array -= MIN_VAL
-                array /= MAX_VAL
-                np.clip(array, 0., 1., out=array)
-            else:
-                np.clip(array, -1024., 3072., out=array)
+            # convert values
+            if self.return_val == 'hu':
+                np.clip(array, -1024., 3071., out=array)
+            else:  # 'mu', 'mu_normed'
+                array *= (MU_WATER - MU_AIR) / 1000
+                array += MU_WATER
+                if self.return_val == 'mu_normed':
+                    array /= MU_MAX
+                    np.clip(array, 0., 1., out=array)
 
             image = self.space.element(array)
 

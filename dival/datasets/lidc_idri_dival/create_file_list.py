@@ -84,7 +84,7 @@ def get_files(ct_dirs, shuffle=True):
 if __name__ == '__main__':
     ct_dirs = get_dirs()
 
-    NUM_TEST_PATIENTS = 50
+    NUM_TEST_PATIENTS = 100  # 50
     NUM_VALIDATION_IMAGES = 5000
     patients = np.unique([s.split('/')[0] for s in ct_dirs])
     np.random.shuffle(patients)
@@ -99,8 +99,8 @@ if __name__ == '__main__':
     train = get_files(train_dirs)
     test = get_files(test_dirs)
 
-    num_add_test_images = len(test)
-    test += train[-num_add_test_images:]
+    num_add_test_images = 0  # len(test)
+    test += train[len(train)-num_add_test_images:]
     np.random.shuffle(test)
     validation = train[-NUM_VALIDATION_IMAGES-num_add_test_images:
                        -num_add_test_images]

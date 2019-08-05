@@ -6,6 +6,7 @@ Submodules
 
 .. toctree::
 
+   dival.util.constants
    dival.util.odl_noise_random_state
    dival.util.odl_utility
    dival.util.plot
