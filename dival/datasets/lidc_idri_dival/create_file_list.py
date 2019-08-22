@@ -84,30 +84,31 @@ def get_files(ct_dirs, shuffle=True):
 if __name__ == '__main__':
     ct_dirs = get_dirs()
 
-    NUM_TEST_PATIENTS = 100  # 50
-    NUM_VALIDATION_IMAGES = 5000
+    NUM_VAL_PATIENTS = 100
+    NUM_TEST_PATIENTS = 100
     patients = np.unique([s.split('/')[0] for s in ct_dirs])
     np.random.shuffle(patients)
+    train_patients = patients[:-NUM_VAL_PATIENTS-NUM_TEST_PATIENTS]
+    val_patients = patients[-NUM_VAL_PATIENTS-NUM_TEST_PATIENTS:
+                            -NUM_TEST_PATIENTS]
     test_patients = patients[-NUM_TEST_PATIENTS:]
     train_dirs = []
+    val_dirs = []
     test_dirs = []
     for ct_dir in ct_dirs:
-        if ct_dir.split('/')[0] in test_patients:
+        p = ct_dir.split('/')[0]
+        if p in test_patients:
             test_dirs.append(ct_dir)
+        elif p in val_patients:
+            val_dirs.append(ct_dir)
         else:
             train_dirs.append(ct_dir)
     train = get_files(train_dirs)
+    val = get_files(val_dirs)
     test = get_files(test_dirs)
 
-    num_add_test_images = 0  # len(test)
-    test += train[len(train)-num_add_test_images:]
-    np.random.shuffle(test)
-    validation = train[-NUM_VALIDATION_IMAGES-num_add_test_images:
-                       -num_add_test_images]
-    train = train[:-NUM_VALIDATION_IMAGES-num_add_test_images]
-
     json_dict = {'train': train,
-                 'validation': validation,
+                 'validation': val,
                  'test': test}
 
     with open(FILE_LIST_FILE, 'w') as json_file:

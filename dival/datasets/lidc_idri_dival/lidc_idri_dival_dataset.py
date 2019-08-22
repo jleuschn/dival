@@ -91,7 +91,8 @@ class LIDCIDRIDivalDataset(GroundTruthDataset):
             dataset = dcmread(os.path.join(DATA_PATH, dcm_file))
 
             # crop to largest rectangle in centered circle
-            array = dataset.pixel_array[75:-75, 75:-75].astype(np.float32).T
+#            array = dataset.pixel_array[75:-75, 75:-75].astype(np.float32).T
+            array = dataset.pixel_array.astype(np.float32).T
 
             # rescale by dicom meta info
             array *= dataset.RescaleSlope

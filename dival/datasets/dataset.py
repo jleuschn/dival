@@ -150,7 +150,9 @@ class ObservationGroundTruthPairDataset(Dataset):
         self.noise_type = noise_type
         self.noise_kwargs = noise_kwargs
         self.noise_seeds = noise_seeds or {}
-        super().__init__(space=(self.forward_op.range, domain))
+        range_ = (self.post_processor.range if self.post_processor is not None
+                  else self.forward_op.range)
+        super().__init__(space=(range_, domain))
         self.shape = (self.space[0].shape, self.space[1].shape)
 
     def generator(self, part='train'):

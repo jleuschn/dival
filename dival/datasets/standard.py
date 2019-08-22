@@ -6,6 +6,7 @@ import numpy as np
 from skimage.transform import resize
 import odl
 from dival.datasets.ellipses.ellipses_dataset import EllipsesDataset
+from dival.datasets.dataset import Dataset
 from dival.util.constants import MU_MAX
 try:
     from dival.datasets.lidc_idri_dival.lidc_idri_dival_dataset import (
@@ -13,6 +14,20 @@ try:
 except FileNotFoundError as e:
     warn('could not import LIDCIDRIDivalDataset because of the following '
          'error:\n\n{}\n'.format(e))
+
+
+class LIDCIDRILowDoseDataset(Dataset):
+    def __init__(self):
+        pass
+
+    def generator(self, part='train'):
+        pass
+
+    def get_observations(self, indices, part='train'):
+        pass
+
+    def get_ground_truth(self, indices, part='train'):
+        pass
 
 
 def get_standard_dataset(name):
@@ -43,6 +58,8 @@ def get_standard_dataset(name):
             A dataset based on real CT reconstructions from the `LIDC-IDRI
             <https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI>`_
             dataset.
+            Note that no ground truth is provided for the ``'test'`` part,
+            because this dataset is going to be used for a competition.
 
             `LIDCIDRIDivalDataset` is used as ground truth dataset and a ray
             transform with parallel beam geometry using 1000 angles is applied.
@@ -142,7 +159,7 @@ def get_standard_dataset(name):
             space, num_angles=NUM_ANGLES,
             det_shape=reco_geometry.detector.shape)
 
-        IMPL = 'astra_cuda'
+        IMPL = 'astra_cpu'
         reco_ray_trafo = odl.tomo.RayTransform(reco_space, reco_geometry,
                                                impl=IMPL)
         ray_trafo = odl.tomo.RayTransform(space, geometry, impl=IMPL)
@@ -167,14 +184,15 @@ def get_standard_dataset(name):
 
         class _LIDCIDRIDivalPostProcessor(odl.Operator):
             def __init__(self):
-                super().__init__(ray_trafo.range, ray_trafo.range)
+                range_ = ray_trafo.range.astype(np.float32)
+                super().__init__(ray_trafo.range, range_)
 
             def _call(self, x, out):
                 data = np.maximum(1 / PHOTONS_PER_PIXEL, x)  # assume at least
                 # one photon per pixel to avoid log(0)
                 np.log(data, out=data)
                 data /= (-MU_MAX)
-                out.assign(ray_trafo.range.element(data))
+                out.assign(self.range.element(data))
 
         forward_op = _LIDCIDRIDivalForwardOp()
         post_processor = _LIDCIDRIDivalPostProcessor()
