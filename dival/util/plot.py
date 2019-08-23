@@ -47,7 +47,7 @@ def plot_image(x, fig=None, ax=None, **kwargs):
         ax.set_xticks(xticks)
     if yticks is not None:
         ax.set_yticks(yticks)
-    im = ax.imshow(x.asarray().T, **kwargs)
+    im = ax.imshow(np.array(x).T, **kwargs)
     return im, ax
 
 
