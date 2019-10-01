@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Provides wrappers for reconstruction methods of odl."""
+"""Provides reconstructors performing regression."""
 import os
 import json
 import numpy as np
 from sklearn.linear_model import Ridge
-from hyperopt import hp
 from dival.util.odl_utility import uniform_discr_element
 from dival import LearnedReconstructor
 
@@ -13,11 +12,8 @@ class LinRegReconstructor(LearnedReconstructor):
     HYPER_PARAMS = {
         'l2_regularization':
             {'default': 0.,
-             'range': [0., float('inf')],
-             'retrain': True,
-             'method': 'hyperopt',
-             'hyperopt_options': {
-                 'space': hp.loguniform('l2_regularization', 0., np.log(1e9))}}
+             'range': [0., np.inf],
+             'retrain': True}
     }
 
     """Reconstructor learning and applying linear regression.
@@ -30,16 +26,21 @@ class LinRegReconstructor(LearnedReconstructor):
 
     Attributes
     ----------
-    weights : `np.ndarray`
+    weights : :class:`np.ndarray`
         The weight matrix.
     """
     def __init__(self, hyper_params=None, **kwargs):
-        """Construct a LinReg reconstructor.
+        """
+        Parameters
+        ----------
+        hyper_params : dict, optional
+            A dict with no items or an item ``'l2_regularization': float``.
+            Cf. :meth:`Reconstructor.init`.
         """
         super().__init__(hyper_params=hyper_params, **kwargs)
         self.weights = None
 
-    def reconstruct(self, observation):
+    def _reconstruct(self, observation):
         reconstruction = np.dot(self.weights, observation)
         return uniform_discr_element(reconstruction, self.reco_space)
 
@@ -66,6 +67,14 @@ class LinRegReconstructor(LearnedReconstructor):
         self.weights = ridge.coef_
 
     def save_params(self, path):
+        """
+        Save :attr:`weights` to file.
+
+        Parameters
+        ----------
+        path : str
+            Filename (ending '.npy').
+        """
         if not os.path.isdir(path):
             os.mkdir(path)
         np.save(os.path.join(path, 'weights.npy'), self.weights)
@@ -73,6 +82,14 @@ class LinRegReconstructor(LearnedReconstructor):
             json.dump(self.hyper_params, file, indent=True)
 
     def load_params(self, path):
+        """
+        Load :attr:`weights` from file.
+
+        Parameters
+        ----------
+        path : str
+            Filename (ending '.npy').
+        """
         self.weights = np.load(os.path.join(path, 'weights.npy'))
         with open(os.path.join(path, 'hyper_params.json'), 'r') as file:
             self.hyper_params.update(json.load(file))

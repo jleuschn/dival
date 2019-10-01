@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Provides classes and methods useful for evaluation of methods."""
+"""Tools for the evaluation of reconstruction methods.
+"""
+import sys
+from warnings import warn
+from itertools import product
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import sys
 from tqdm import tqdm
-from odl.solvers.util.callback import CallbackStore
+from odl.solvers.util.callback import Callback, CallbackStore
 from dival.util.plot import plot_image, plot_images
 from dival.util.std_out_err_redirect_tqdm import std_out_err_redirect_tqdm
 from dival.measure import Measure
 from dival.data import DataPairs
-from dival import LearnedReconstructor
-from dival.hyper_param_optimization import optimize_hyper_params
+from dival import IterativeReconstructor, LearnedReconstructor
 
 
 class TaskTable:
@@ -23,8 +25,8 @@ class TaskTable:
         Name of the task table.
     tasks : list of dict
         Tasks that shall be run. The fields of each dict are set from the
-        parameters to `append` (or `append_all_combinations`). See the
-        documentation of `append` for documentation of these fields.
+        parameters to :meth:`append` (or :meth:`append_all_combinations`). Cf.
+        documentation of :meth:`append` for details.
     """
     def __init__(self, name=''):
         self.name = name
@@ -43,7 +45,7 @@ class TaskTable:
             ``True``.
 
             If ``False``, no iterates (intermediate reconstructions) will be
-            saved, even if ``task['options']['save_iterates']`` is ``True``.
+            saved, even if ``task['options']['save_iterates']==True``.
         show_progress : str, optional
             Whether and how to show progress. Options are:
 
@@ -51,10 +53,9 @@ class TaskTable:
                     print a line before running each task
                 ``'tqdm'``
                     show a progress bar with ``tqdm``
-                ``None``
+                `None`
                     do not show progress
         """
-        results = ResultTable()
         row_list = []
         with std_out_err_redirect_tqdm(None if show_progress == 'tqdm' else
                                        sys.stdout) as orig_stdout:
@@ -74,108 +75,197 @@ class TaskTable:
                              Measure.get_by_short_name(measure))
                             for measure in task['measures']]
                 options = task['options']
+                skip_training = options.get('skip_training', False)
+                save_iterates = (save_reconstructions and
+                                 options.get('save_iterates'))
 
-                hp_opt = options.get('hyper_param_search')
-                if hp_opt:
-                    dataset = task.get('dataset')
-                    validation_data = hp_opt.get('validation_data')
-                    if validation_data is None:
-                        validation_data = dataset.get_data_pairs('validation')
-                    kwargs = {}
-                    for k in ('hyperopt_max_evals',
-                              'hyperopt_max_evals_retrain'):
-                        v = hp_opt.get(k)
-                        if v is not None:
-                            kwargs[k] = v
-                    optimize_hyper_params(
-                        reconstructor, validation_data, hp_opt['measure'],
-                        dataset=dataset,
-                        HYPER_PARAMS_override=hp_opt.get('HYPER_PARAMS'),
-                        hyperopt_rstate=hp_opt.get('hyperopt_rstate'),
-                        show_progressbar=hp_opt.get('show_progress',
-                                                    show_progress == 'text'),
-                        tqdm_file=orig_stdout,
-                        **kwargs)
+                hp_choices = task.get('hyper_param_choices')
+                if hp_choices:
+                    # run all hyper param choices as sub-tasks
+                    retrain_param_keys = [k for k, v in
+                                          reconstructor.HYPER_PARAMS.items()
+                                          if v.get('retrain', False)]
+                    orig_hyper_params = reconstructor.hyper_params.copy()
 
-                reconstructions = []
-                if save_reconstructions and options.get('save_iterates'):
-                    iterates = []
-                    if options.get('save_iterates_measure_values'):
-                        iterates_measure_values = {m.short_name: []
-                                                   for m in measures}
+                    def _warn_if_invalid_keys(keys):
+                        for k in keys:
+                            if k not in reconstructor.HYPER_PARAMS.keys():
+                                warn("choice for unknown hyper parameter '{}' "
+                                     "for reconstructor of type '{}' will be "
+                                     'ignored'.format(k, type(reconstructor)))
 
-                for observation, ground_truth in zip(test_data.observations,
-                                                     test_data.ground_truth):
-                    callbacks = []
-                    if reconstructor.callback is not None:
-                        callbacks.append(reconstructor.callback)
-                    if save_reconstructions and options.get('save_iterates'):
-                        iters = []
-                        iterates.append(iters)
-                        callback_save_iterates = CallbackStore(
-                            iters, step=options.get('save_iterates_step', 1))
-                        callbacks.append(callback_save_iterates)
-                    if options.get('save_iterates_measure_values'):
-                        for measure in measures:
-                            iters_mvs = []
-                            iterates_measure_values[measure.short_name].append(
-                                iters_mvs)
-                            callback_store = CallbackStore(
-                                iters_mvs,
-                                step=options.get('save_iterates_step', 1))
-                            callbacks.append(
-                                callback_store *
-                                measure.as_operator_for_fixed_ground_truth(
-                                    ground_truth))
-                    if len(callbacks) > 0:
-                        reconstructor.callback = callbacks[-1]
-                        for callback in callbacks[-2::-1]:
-                            reconstructor.callback &= callback
+                    if isinstance(hp_choices, dict):
+                        _warn_if_invalid_keys(hp_choices.keys())
+                        keys_retrain_first = sorted(
+                            hp_choices.keys(),
+                            key=lambda k: k not in retrain_param_keys)
+                        param_values = [
+                            hp_choices.get(k, [orig_hyper_params[k]]) for k in
+                            keys_retrain_first]
+                        hp_choice_it = [
+                            dict(zip(keys_retrain_first, v)) for
+                            v in product(*param_values)]
+                    else:
+                        hp_choice_it = hp_choices
+                        for hp_choice in hp_choice_it:
+                            _warn_if_invalid_keys(hp_choice.keys())
+                    for j, hp_choice in enumerate(hp_choice_it):
+                        train = (isinstance(reconstructor,
+                                            LearnedReconstructor) and (
+                            j == 0 or any(
+                                (hp_choice[k] != reconstructor.hyper_params[k]
+                                 for k in retrain_param_keys))))
+                        reconstructor.hyper_params = orig_hyper_params.copy()
+                        reconstructor.hyper_params.update(hp_choice)
+                        if train and not skip_training:
+                            reconstructor.train(task['dataset'])
+                        row = self._run_task(
+                            reconstructor=reconstructor,
+                            test_data=test_data,
+                            measures=measures,
+                            hp_choice=hp_choice,
+                            options=options,
+                            save_reconstructions=save_reconstructions,
+                            save_iterates=save_iterates,
+                            )
+                        row['task_ind'] = i
+                        row['sub_task_ind'] = j
+                        row_list.append(row)
+                    reconstructor.hyper_params = orig_hyper_params.copy()
+                else:
+                    # run task (with hyper params as they are)
+                    if (isinstance(reconstructor, LearnedReconstructor) and
+                            not skip_training):
+                        reconstructor.train(task['dataset'])
 
-                    reconstructions.append(reconstructor.reconstruct(
-                        observation))
+                    row = self._run_task(
+                        reconstructor=reconstructor,
+                        test_data=test_data,
+                        measures=measures,
+                        hp_choice=None,
+                        options=options,
+                        save_reconstructions=save_reconstructions,
+                        save_iterates=save_iterates,
+                        )
+                    row['task_ind'] = i
+                    row['sub_task_ind'] = 0
+                    row_list.append(row)
 
-                measure_values = {}
-                for measure in measures:
-                    measure_values[measure.short_name] = [
-                        measure.apply(r, g) for r, g in zip(
-                            reconstructions, test_data.ground_truth)]
-                misc = {}
-                if save_reconstructions and options.get('save_iterates'):
-                    misc['iterates'] = iterates
-                if options.get('save_iterates_measure_values'):
-                    misc['iterates_measure_values'] = iterates_measure_values
-                row = {'reconstructions': None,
-                       'reconstructor': reconstructor,
-                       'test_data': test_data,
-                       'measure_values': measure_values,
-                       'misc': misc}
-                if save_reconstructions:
-                    row['reconstructions'] = reconstructions
-                row_list.append(row)
-        results.results = pd.concat([results.results, pd.DataFrame(row_list)],
-                                    ignore_index=True, sort=False)
+        results = ResultTable(row_list)
         return results
 
+    def _run_task(self, reconstructor, test_data, measures, options, hp_choice,
+                  save_reconstructions, save_iterates):
+        reconstructions = []
+        if (isinstance(reconstructor, IterativeReconstructor) and
+                save_iterates):
+            iterates = []
+            if options.get('save_iterates_measure_values'):
+                iterates_measure_values = {m.short_name: []
+                                           for m in measures}
+
+        for observation, ground_truth in zip(test_data.observations,
+                                             test_data.ground_truth):
+            if isinstance(reconstructor, IterativeReconstructor):
+                callbacks = []
+                orig_callback = reconstructor.callback
+                if isinstance(orig_callback, Callback):
+                    callbacks.append(orig_callback)
+                elif orig_callback is not None:
+                    warn('original callback of reconstructor '
+                         'deactivated since it is not of type '
+                         '`odl.solvers.util.callback.Callback` (got '
+                         '`{}`)'.format(type(orig_callback)))
+                if save_iterates:
+                    iters = []
+                    iterates.append(iters)
+                    callback_save_iterates = CallbackStore(
+                        iters,
+                        step=options.get('save_iterates_step', 1))
+                    callbacks.append(callback_save_iterates)
+                if options.get('save_iterates_measure_values'):
+                    for measure in measures:
+                        iters_mvs = []
+                        iterates_measure_values[
+                            measure.short_name].append(iters_mvs)
+                        callback_store = CallbackStore(
+                            iters_mvs,
+                            step=options.get('save_iterates_step', 1))
+                        callbacks.append(
+                            callback_store *
+                            measure.as_operator_for_fixed_ground_truth(
+                                ground_truth))
+                if len(callbacks) > 0:
+                    reconstructor.callback = callbacks[-1]
+                    for callback in callbacks[-2::-1]:
+                        reconstructor.callback &= callback
+
+            reconstructions.append(reconstructor.reconstruct(
+                observation))
+
+            if isinstance(reconstructor, IterativeReconstructor):
+                reconstructor.callback = orig_callback
+
+        measure_values = {}
+        for measure in measures:
+            measure_values[measure.short_name] = [
+                measure.apply(r, g) for r, g in zip(
+                    reconstructions, test_data.ground_truth)]
+        misc = {}
+        if isinstance(reconstructor, IterativeReconstructor):
+            if save_iterates:
+                misc['iterates'] = iterates
+            if options.get('save_iterates_measure_values'):
+                misc['iterates_measure_values'] = (
+                    iterates_measure_values)
+        if hp_choice:
+            misc['hp_choice'] = hp_choice
+
+        row = {'reconstructions': reconstructions,
+               'reconstructor': reconstructor,
+               'test_data': test_data,
+               'measure_values': measure_values,
+               'misc': misc}
+        if save_reconstructions:
+            row['reconstructions'] = reconstructions
+        return row
+
     def append(self, reconstructor, test_data, measures=None, dataset=None,
-               options=None):
+               hyper_param_choices=None, options=None):
         """Append a task.
 
         Parameters
         ----------
-        reconstructor : `Reconstructor`
+        reconstructor : :class:`.Reconstructor`
             The reconstructor.
-        test_data : `DataPairs`
+        test_data : :class:`.DataPairs`
             The test data.
-        measures : sequence of (`Measure` or str)
-            Measures that will be applied. Either `Measure` objects or their
-            short names can be passed.
-        dataset : `Dataset`
-            The dataset that will be passed to `reconstructor.train` if it is a
-            `LearnedReconstructor`.
+        measures : sequence of (:class:`.Measure` or str)
+            Measures that will be applied. Either :class:`.Measure` objects or
+            their short names can be passed.
+        dataset : :class:`.Dataset`
+            The dataset that will be passed to
+            :meth:`reconstructor.train <LearnedReconstructor.train>` if it is a
+            :class:`.LearnedReconstructor`.
+        hyper_param_choices : dict of list or list of dict, optional
+            Choices of hyper parameter combinations to try as sub-tasks.
+
+                * If a dict of lists is specified, all combinations of the
+                  list elements (cartesian product space) are tried.
+                * If a list of dicts is specified, each dict is taken as a
+                  parameter combination to try.
+
+            The current parameter values are read from
+            :attr:`Reconstructor.hyper_params` in the beginning and used as
+            default values for all parameters not specified in the passed
+            dicts. Afterwards, the original values are restored.
         options : dict
             Options that will be used. Options are:
 
+            ``'skip_training'`` : bool, optional
+                Whether to skip training. Can be used for manual training
+                of reconstructors (or loading of a stored state).
+                The default is ``False``.
             ``'save_iterates'`` : bool, optional
                 Whether to save the intermediate reconstructions of iterative
                 reconstructors (the default is ``False``).
@@ -190,43 +280,27 @@ class TaskTable:
             ``'save_iterates_step'`` : int, optional
                 Step size for ``'save_iterates'`` and
                 ``'save_iterates_measure_values'`` (the default is 1).
-            ``'hyper_param_search'`` : dict, optional
-                Options for hyper parameter search. If ``None``, the default
-                hyper parameter values are used. If given, it must specify the
-                following fields:
-
-                    ``'measure'`` : `Measure`
-                        The measure used for hyper parameter optimization.
-                    ``'dataset'`` : `Dataset`, optional
-                        Dataset for training the reconstructor. Only needs to
-                        be specified if the reconstructor is a
-                        `LearnedReconstructor`.
-                    ``'HYPER_PARAMS'`` : dict, optional
-                        Hyper parameter specification overriding the defaults
-                        in ``type(reconstructor).HYPER_PARAMS``.
-                        The structure of this dict is the same as the structure
-                        of ``Reconstructor.HYPER_PARAMS``, except that all
-                        fields are optional.
-                        Here, each value of a dict for one parameter is treated
-                        as an entity, i.e. specifying the dict
-                        ``HYPER_PARAMS[...]['grid_search_options']`` overrides
-                        the whole dict, not only the specified keys in it.
         """
-        if isinstance(reconstructor, LearnedReconstructor) and dataset is None:
-            raise ValueError('in order to use a learned reconstructor you '
-                             'must specify a `dataset` for training')
         if measures is None:
             measures = []
         if options is None:
             options = {}
+        if (isinstance(reconstructor, LearnedReconstructor) and
+                not options.get('skip_training', False) and dataset is None):
+            raise ValueError('in order to use a learned reconstructor you '
+                             'must specify a `dataset` for training (or set '
+                             '``skip_training: True`` in `options` and train '
+                             'manually)')
         self.tasks.append({'reconstructor': reconstructor,
                            'test_data': test_data,
                            'measures': measures,
                            'dataset': dataset,
+                           'hyper_param_choices': hyper_param_choices,
                            'options': options})
 
     def append_all_combinations(self, reconstructors, test_data, measures=None,
-                                datasets=None, options=None):
+                                datasets=None, hyper_param_choices=None,
+                                options=None):
         """Append tasks of all combinations of test data, reconstructors and
         optionally datasets.
         The order is taken from the lists, with test data changing slowest
@@ -245,6 +319,11 @@ class TaskTable:
         datasets : list of `Dataset`, optional
             Dataset list. Required if `reconstructors` contains at least one
             `LearnedReconstructor`.
+        hyper_param_choices : list of (dict of list or list of dict), optional
+            Choices of hyper parameter combinations for each reconstructor,
+            which are tried as sub-tasks.
+            The i-th element of this list is used for the i-th reconstructor.
+            See `append` for documentation of how the choices are passed.
         options : dict
             Options that will be used. The same options are used for all
             combinations of test data and reconstructors. See `append` for
@@ -252,12 +331,18 @@ class TaskTable:
         """
         if datasets is None:
             datasets = [None]
+        if hyper_param_choices is None:
+            hyper_param_choices = [None] * len(reconstructors)
         for test_data_ in test_data:
             for dataset in datasets:
-                for reconstructor in reconstructors:
+                for reconstructor, hp_choices in zip(reconstructors,
+                                                     hyper_param_choices):
                     self.append(reconstructor=reconstructor,
-                                test_data=test_data_, measures=measures,
-                                dataset=dataset, options=options)
+                                test_data=test_data_,
+                                measures=measures,
+                                dataset=dataset,
+                                hyper_param_choices=hp_choices,
+                                options=options)
 
     def __repr__(self):
         return "TaskTable(name='{name}', tasks={tasks})".format(
@@ -266,114 +351,121 @@ class TaskTable:
 
 
 class ResultTable:
-    """Result table of running an evaluation task table.
+    """The results of a :class:`.TaskTable`.
+
+    Cf. :attr:`TaskTable.results`.
 
     Attributes
     ----------
-    results : `pandas.DataFrame`
+    results : :class:`pandas.DataFrame`
         The results.
-        It has the columns ``'reconstructions'``, ``'reconstructor'``,
+        The index is given by ``'task_ind'`` and ``'sub_task_ind'``, and the
+        columns are ``'reconstructions'``, ``'reconstructor'``,
         ``'test_data'``, ``'measure_values'`` and ``'misc'``.
     """
-    def __init__(self, reconstructions=None, reconstructor=None,
-                 test_data=None, measure_values=None, misc=None):
-        if reconstructions is None:
-            reconstructions = []
-        if reconstructor is None:
-            reconstructor = []
-        if test_data is None:
-            test_data = []
-        if measure_values is None:
-            measure_values = []
-        if misc is None:
-            misc = []
-        data_dict = {'reconstructions': reconstructions,
-                     'reconstructor': reconstructor,
-                     'test_data': test_data,
-                     'measure_values': measure_values,
-                     'misc': misc}
-        self.results = pd.DataFrame.from_dict(data_dict)
-
-    def apply_measures(self, measures, index=None):
-        """Apply (additional) measures to reconstructions.
-
-        This is not possible if the reconstructions were not saved, in which
-        case a `ValueError` is raised.
+    def __init__(self, row_list):
+        """
+        Usually, objects of this type are constructed by
+        :meth:`TaskTable.run`, which sets :attr:`TaskTable.results`, rather
+        than by manually calling this constructor.
 
         Parameters
         ----------
-        measures : list of Measure
+        row_list : list of dict
+            Result rows.
+            Used to build :attr:`results` of type :class:`pandas.DataFrame`.
+        """
+        self.results = pd.DataFrame(row_list).set_index(['task_ind',
+                                                         'sub_task_ind'])
+
+    def apply_measures(self, measures, task_ind=None):
+        """Apply (additional) measures to reconstructions.
+
+        This is not possible if the reconstructions were not saved, in which
+        case a :class:`ValueError` is raised.
+
+        Parameters
+        ----------
+        measures : list of :class:`.Measure`
             Measures to apply.
-        index : int or sequence of ints, optional
-            Indexes of results to which the measures shall be applied.
-            If `index` is ``None``, this is interpreted as "all results".
+        task_ind : int or sequence of ints, optional
+            Indexes of tasks to which the measures shall be applied.
+            If `None`, this is interpreted as "all results".
 
         Raises
         ------
         ValueError
-            If reconstructions are missing or `index` is not valid.
+            If reconstructions are missing or `task_ind` is not valid.
         """
-        if index is None:
-            indexes = range(len(self.results))
-        elif np.isscalar(index):
-            indexes = [index]
-        elif isinstance(index, list):
-            indexes = index
+        if task_ind is None:
+            indexes = self.results.index.levels[0]
+        elif np.isscalar(task_ind):
+            indexes = [task_ind]
+        elif isinstance(task_ind, list):
+            indexes = task_ind
         else:
-            raise ValueError('index must be a scalar, a list of ints or '
-                             '``None``')
+            raise ValueError('`task_ind` must be a scalar, a list of ints or '
+                             '`None`')
         for i in indexes:
-            row = self.results.iloc[i]
-            if row['reconstructions'] is None:
-                raise ValueError('reconstructions missing in row {i}'.format(
-                    i=i))
-            for measure in measures:
-                if isinstance(measure, str):
-                    measure = Measure.get_by_short_name(measure)
-                row['measure_values'][measure.short_name] = [
-                    measure.apply(r, g) for r, g in zip(
-                        row['reconstructions'], row['test_data'].ground_truth)]
+            rows = self.results.loc[i]
+            for j in range(len(rows)):
+                row = rows.loc[j]
+                if row['reconstructions'] is None:
+                    raise ValueError('reconstructions missing in task {}{}'
+                                     .format(i, '.{}'.format(j) if
+                                                len(rows) > 1 else ''))
+                for measure in measures:
+                    if isinstance(measure, str):
+                        measure = Measure.get_by_short_name(measure)
+                    row['measure_values'][measure.short_name] = [
+                        measure.apply(r, g) for r, g in zip(
+                            row['reconstructions'],
+                            row['test_data'].ground_truth)]
 
-    def plot_reconstruction(self, index, test_index=-1,
+    def plot_reconstruction(self, task_ind, sub_task_ind=0, test_ind=-1,
                             plot_ground_truth=True, **kwargs):
         """Plot the reconstruction at the specified index.
         Supports only 1d and 2d reconstructions.
 
         Parameters
         ----------
-        index : int
+        task_ind : int
             Index of the task.
-        test_index : sequence of int or int, optional
-            Index in test data. If -1, plot all reconstructions (the default).
+        sub_task_ind : int, optional
+            Index of the sub-task (default ``0``).
+        test_ind : sequence of int or int, optional
+            Index in test data. If ``-1``, plot all reconstructions (the
+            default).
         plot_ground_truth : bool, optional
             Whether to show the ground truth next to the reconstruction.
             The default is ``True``.
         kwargs : dict
-            Keyword arguments that are passed to `plot_image` if the
-            reconstruction is 2d.
+            Keyword arguments that are passed to
+            :func:`~dival.util.plot.plot_image` if the reconstruction is 2d.
 
         Returns
         -------
-        ax_list : list of ndarray of matplotlib.axes.Axes
-            The axes the reconstructions and eventually ground truth were
-            plotted in.
+        ax_list : list of :class:`np.ndarray` of :class:`matplotlib.axes.Axes`
+            The axes in which the reconstructions and eventually the ground
+            truth were plotted.
         """
-        row = self.results.iloc[index]
+        row = self.results.loc[task_ind, sub_task_ind]
         test_data = row.at['test_data']
         reconstructor = row.at['reconstructor']
         ax_list = []
-        if isinstance(test_index, int):
-            if test_index == -1:
-                test_index = range(len(test_data))
+        if isinstance(test_ind, int):
+            if test_ind == -1:
+                test_ind = range(len(test_data))
             else:
-                test_index = [test_index]
-        for i in test_index:
-            title = 'reconstruction for task {index}, test_data[{i}]'.format(
-                index=index, i=i)
+                test_ind = [test_ind]
+        for i in test_ind:
+            title = 'reconstruction for task {}{}, test_data[{}]'.format(
+                task_ind, '.{}'.format(sub_task_ind) if
+                          len(self.results.loc[task_ind]) > 1 else '', i)
             reconstruction = row.at['reconstructions'][i]
             ground_truth = test_data.ground_truth[i]
             if reconstruction is None:
-                raise ValueError('reconstruction is ``None``')
+                raise ValueError('reconstruction is `None`')
             if reconstruction.asarray().ndim > 2:
                 print('only 1d and 2d reconstructions can be plotted')
                 return
@@ -404,21 +496,23 @@ class ResultTable:
         Parameters
         ----------
         kwargs : dict
-            Keyword arguments that are forwarded to `self.plot_reconstruction`.
+            Keyword arguments that are forwarded to
+            :meth:`plot_reconstruction`.
 
         Returns
         -------
-        ax : ndarray of `matplotlib.axes.Axes`
+        ax : :class:`np.ndarray` of :class:`matplotlib.axes.Axes`
             The axes the reconstructions were plotted in.
         """
         ax = []
-        for i in range(len(self.results)):
-            ax_ = self.plot_reconstruction(i, **kwargs)
+        for i, j in self.results.index:
+            ax_ = self.plot_reconstruction(task_ind=i, sub_task_ind=j,
+                                           **kwargs)
             ax.append(ax_)
         return np.vstack(ax)
 
-    def plot_convergence(self, index, measures=None, fig_size=None,
-                         gridspec_kw=None):
+    def plot_convergence(self, task_ind, sub_task_ind=0, measures=None,
+                         fig_size=None, gridspec_kw=None):
         """
         Plot measure values for saved iterates.
 
@@ -426,26 +520,30 @@ class ResultTable:
 
         Parameters
         ----------
-        index : int
-            Row index of the result.
-        measures : list of `Measure` or `Measure`, optional
+        task_ind : int
+            Index of the task.
+        sub_task_ind : int, optional
+            Index of the sub-task (default ``0``).
+        measures : [list of ] :class:`.Measure`, optional
             Measures to apply. Each measure is plotted in a subplot.
-            If ``None`` is passed, all measures in ``result['measure_values']``
+            If `None` is passed, all measures in ``result['measure_values']``
             are used.
 
         Returns
         -------
-        ax : ndarray of `matplotlib.axes.Axes`
+        ax : :class:`np.ndarray` of :class:`matplotlib.axes.Axes`
             The axes the measure values were plotted in.
         """
-        row = self.results.iloc[index]
+        row = self.results.loc[task_ind, sub_task_ind]
         iterates_measure_values = row['misc'].get('iterates_measure_values')
         if not iterates_measure_values:
             iterates = row['misc'].get('iterates')
             if not iterates:
                 raise ValueError(
                     "no 'iterates_measure_values' or 'iterates' in results "
-                    "row {}".format(index))
+                    "of task {}{}".format(
+                        task_ind, '.{}'.format(sub_task_ind) if
+                        len(self.results.loc[task_ind]) > 1 else ''))
         if measures is None:
             measures = row['measure_values'].keys()
         elif isinstance(measures, Measure):
@@ -474,25 +572,30 @@ class ResultTable:
         """
         Plot average measure values for different reconstructors.
         The values have to be computed previously, e.g. by
-        `self.apply_measures`.
+        :meth:`apply_measures`.
 
-        The average is computed over all rows of `self.results` with the
+        The average is computed over all rows of :attr:`results` with the
         specified `test_data` that store the requested `measure` value.
+
+        Note that for tasks with multiple sub-tasks, all of them are used when
+        computing the average (i.e., the measure values for all hyper parameter
+        choices are averaged).
 
         Parameters
         ----------
-        measure : `Measure` or str
-            The measure to plot (or its ``short_name``).
-        reconstructors : sequence of `Reconstructor`, optional
-            The reconstructors to compare. If ``None`` (default), all
+        measure : :class:`.Measure` or str
+            The measure to plot (or its :attr:`~.Measure.short_name`).
+        reconstructors : sequence of :class:`.Reconstructor`, optional
+            The reconstructors to compare. If `None` (default), all
             reconstructors that are found in the results are compared.
-        test_data : sequence of `DataPairs` or `DataPairs`, optional
+        test_data : [sequence of ] :class:`.DataPairs`, optional
             Test data to take into account for computing the mean value.
+            By default, all test data is used.
         weighted_average : bool, optional
-            Whether to weight the rows according to the number of test data
-            elements.
+            Whether to weight the rows according to the number of pairs in
+            their test data.
             Default: ``False``, i.e. all rows are weighted equally.
-            If ``True``, all test data elements are weighted equally.
+            If ``True``, all test data pairs are weighted equally.
 
         Returns
         -------
@@ -527,39 +630,64 @@ class ResultTable:
         ax.set_title('{measure_name}'.format(measure_name=measure.name))
         return ax
 
-    def to_string(self, max_colwidth=70, formatters=None, **kwargs):
-        """Convert to string. Used by `self.__str__`.
+    def to_string(self, max_colwidth=70, formatters=None, hide_columns=None,
+                  show_columns=None, **kwargs):
+        """Convert to string. Used by :meth:`__str__`.
 
         Parameters
         ----------
         max_colwidth : int, optional
-            Maximum width of each column, c.f. pandas' option
-            ``'display.max_colwidth'``. Default is 70.
+            Maximum width of the columns, c.f. the option
+            ``'display.max_colwidth'`` of pandas.
         formatters : dict of functions, optional
-            Formatter functions for the columns of `self.results`, passed to
-            `self.results.to_string`.
+            Custom formatter functions for the columns, passed to
+            :meth:`results.to_string <pandas.DataFrame.to_string>`.
+        hide_columns : list of str, optional
+            Columns to hide. Default: ``['reconstructions', 'misc']``.
+        show_columns : list of str, optional
+            Columns to show. Overrides `hide_columns`.
         kwargs : dict
-            Keyword arguments passed to `self.results.to_string`.
+            Keyword arguments passed to
+            :meth:`results.to_string <pandas.DataFrame.to_string>`.
 
         Returns
         -------
-        str
+        string : str
             The string.
         """
-        def test_data_formatter(test_data):
-            return test_data.name or test_data.__repr__()
+
+        def measure_values_formatter(measure_values):
+            means = ['{}: {:.4g}'.format(k, np.mean(v)) for k, v in
+                     measure_values.items()]
+            return 'mean: {{{}}}'.format(', '.join(means))
+
+        def name_or_repr_formatter(x):
+            return x.name or x.__repr__()
+
         formatters_ = {}
-        formatters_['test_data'] = test_data_formatter
+        formatters_['measure_values'] = measure_values_formatter
+        formatters_['test_data'] = name_or_repr_formatter
+        formatters_['reconstructor'] = name_or_repr_formatter
         if formatters is not None:
             formatters_.update(formatters)
+        if hide_columns is None:
+            hide_columns = ['reconstructions', 'misc']
+        if show_columns is None:
+            show_columns = []
+        columns = [c for c in self.results.columns if c not in hide_columns or
+                   c in show_columns]
         with pd.option_context('display.max_colwidth', max_colwidth):
             return "ResultTable(results=\n{}\n)".format(
-                self.results.to_string(formatters=formatters_, **kwargs))
+                self.results.to_string(formatters=formatters_, columns=columns,
+                                       **kwargs))
 
     def print_summary(self):
         """Prints a summary of the results.
         """
-        print('ResultTable with {:d} rows.'.format(len(self.results)))
+        print('ResultTable with {:d} tasks.'.format(
+            len(self.results.index.levels[0])))
+        if len(self.results.index.levels[1]) > 1:
+            print('Total count of sub-tasks: {}'.format(len(self.results)))
         test_data_list = pd.unique(self.results['test_data'])
         if len(test_data_list) == 1:
             print('Test data: {}'.format(test_data_list[0]))

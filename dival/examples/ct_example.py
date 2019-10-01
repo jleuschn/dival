@@ -2,7 +2,7 @@ import numpy as np
 import odl
 from dival.data import DataPairs
 from dival.evaluation import TaskTable
-from dival.measure import L2, PSNR, SSIM
+from dival.measure import PSNR, SSIM
 from dival.reconstructors.odl_reconstructors import (FBPReconstructor,
                                                      CGReconstructor,
                                                      GaussNewtonReconstructor,
@@ -19,11 +19,11 @@ phantom = odl.phantom.shepp_logan(reco_space, modified=True)
 ground_truth = phantom
 
 geometry = odl.tomo.cone_beam_geometry(reco_space, 40, 40, 360)
-ray_trafo = odl.tomo.RayTransform(reco_space, geometry)
+ray_trafo = odl.tomo.RayTransform(reco_space, geometry, impl='astra_cpu')
 proj_data = ray_trafo(phantom)
-observation = proj_data + np.random.poisson(0.3, proj_data.shape)
+observation = (proj_data + np.random.poisson(0.3, proj_data.shape)).asarray()
 
-test_data = DataPairs(observation, ground_truth, name='shepp_logan + gaussian')
+test_data = DataPairs(observation, ground_truth, name='shepp-logan + pois')
 
 # %% task table and reconstructors
 eval_tt = TaskTable()
@@ -45,12 +45,12 @@ eval_tt.append_all_combinations(reconstructors=reconstructors,
 
 # %% run task table
 results = eval_tt.run()
-print(results.to_string(formatters={'reconstructor': lambda r: r.name}))
+results.apply_measures([PSNR, SSIM])
+print(results)
 
 # %% plot reconstructions
 fig = results.plot_all_reconstructions(fig_size=(9, 4), vrange='individual')
 
 # %% plot convergence
-results.apply_measures([L2, PSNR, SSIM])
 results.plot_convergence(1, fig_size=(9, 6), gridspec_kw={'hspace': 0.5})
 results.plot_performance(PSNR)

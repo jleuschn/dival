@@ -9,7 +9,11 @@
 # v. 2.0. If a copy of the MPL was not distributed with this file, You can
 # obtain one at https://mozilla.org/MPL/2.0/.
 
-"""Functions to create noise samples of different distributions."""
+"""Functions to create noise samples of different distributions.
+
+This module is a copy of :mod:`odl.phantom.noise` that was modified to support
+random states instead of seeds.
+"""
 
 from __future__ import print_function, division, absolute_import
 import numpy as np
@@ -38,11 +42,11 @@ def white_noise(space, mean=0, stddev=1, seed=None, random_state=None):
         interpreted as ``stddev * space.one()``.
     seed : int, optional
         Random seed to use for generating the noise.
-        For ``None``, use the current seed.
+        For `None`, use the current seed.
         Only takes effect if ``random_state is None``.
     random_state : `numpy.random.RandomState`, optional
         Random state to use for generating the noise.
-        For ``None``, use the global numpy random state (i.e. functions in
+        For `None`, use the global numpy random state (i.e. functions in
         ``np.random``).
 
     Returns
@@ -101,11 +105,11 @@ def uniform_noise(space, low=0, high=1, seed=None, random_state=None):
         as their respective part of the noise.
     seed : int, optional
         Random seed to use for generating the noise.
-        For ``None``, use the current seed.
+        For `None`, use the current seed.
         Only takes effect if ``random_state is None``.
     random_state : `numpy.random.RandomState`, optional
         Random state to use for generating the noise.
-        For ``None``, use the global numpy random state (i.e. functions in
+        For `None`, use the global numpy random state (i.e. functions in
         ``np.random``).
 
     Returns
@@ -160,11 +164,11 @@ def poisson_noise(intensity, seed=None, random_state=None):
         Poisson distributed random variable.
     seed : int, optional
         Random seed to use for generating the noise.
-        For ``None``, use the current seed.
+        For `None`, use the current seed.
         Only takes effect if ``random_state is None``.
     random_state : `numpy.random.RandomState`, optional
         Random state to use for generating the noise.
-        For ``None``, use the global numpy random state (i.e. functions in
+        For `None`, use the global numpy random state (i.e. functions in
         ``np.random``).
 
     Notes
@@ -232,11 +236,11 @@ def salt_pepper_noise(vector, fraction=0.05, salt_vs_pepper=0.5,
         value per subspace is taken.
     seed : int, optional
         Random seed to use for generating the noise.
-        For ``None``, use the current seed.
+        For `None`, use the current seed.
         Only takes effect if ``random_state is None``.
     random_state : `numpy.random.RandomState`, optional
         Random state to use for generating the noise.
-        For ``None``, use the global numpy random state (i.e. functions in
+        For `None`, use the global numpy random state (i.e. functions in
         ``np.random``).
 
     Returns

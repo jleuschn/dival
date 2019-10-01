@@ -6,9 +6,9 @@ Subpackages
 
 .. toctree::
 
-    dival.datasets
-    dival.reconstructors
-    dival.util
+   dival.datasets
+   dival.reconstructors
+   dival.util
 
 Submodules
 ----------
@@ -18,13 +18,13 @@ Submodules
    dival.config
    dival.data
    dival.evaluation
-   dival.hyper_param_optimization
+   dival.hyper_param_search
    dival.measure
 
 Module contents
 ---------------
 
 .. automodule:: dival
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:

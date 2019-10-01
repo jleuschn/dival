@@ -9,28 +9,28 @@ import numpy as np
 
 
 def plot_image(x, fig=None, ax=None, **kwargs):
-    """Plot `x` using matplotlib's `imshow` method.
+    """Plot image using matplotlib's :meth:`imshow` method.
 
     Parameters
     ----------
     x : array-like or PIL image
         The image data. For further information see `imshow documentation
         <https://matplotlib.org/api/_as_gen/matplotlib.pyplot.imshow.html>`_.
-    fig : matplotlib.figure.Figure, optional
+    fig : :class:`matplotlib.figure.Figure`, optional
         The figure to plot the image in. If ``fig is None``, but `ax` is given,
         it is retrieved from `ax`. If both ``fig is None`` and ``ax is None``,
         a new figure is created.
-    ax : matplotlib.axes.Axes, optional
-        The axes to plot the image in. If ``None``, an axes object is created
+    ax : :class:`matplotlib.axes.Axes`, optional
+        The axes to plot the image in. If `None`, an axes object is created
         in `fig`.
     kwargs : dict, optional
-        Keyword arguments passed to `ax.imshow`.
+        Keyword arguments passed to ``ax.imshow``.
 
     Returns
     -------
-    im : matplotlib.image.AxesImage
+    im : :class:`matplotlib.image.AxesImage`
         The image that was plotted.
-    ax : matplotlib.axes.Axes
+    ax : :class:`matplotlib.axes.Axes`
         The axes the image was plotted in.
     """
     if fig is None:
@@ -47,17 +47,18 @@ def plot_image(x, fig=None, ax=None, **kwargs):
         ax.set_xticks(xticks)
     if yticks is not None:
         ax.set_yticks(yticks)
-    im = ax.imshow(np.array(x).T, **kwargs)
+    im = ax.imshow(np.asarray(x).T, **kwargs)
     return im, ax
 
 
 def plot_images(x_list, nrows=1, ncols=-1, fig=None, vrange='equal',
                 cbar='auto', rect=None, fig_size=None, **kwargs):
-    """Plot multiple images using matplotlib's `imshow` method in subplots.
+    """Plot multiple images using matplotlib's :meth:`imshow` method in
+    subplots.
 
     Parameters
     ----------
-    x_list : list of (array-like or PIL image)
+    x_list : sequence of (array-like or PIL image)
         List of the image data. For further information see `imshow
         documentation
         <https://matplotlib.org/api/_as_gen/matplotlib.pyplot.imshow.html>`_.
@@ -68,7 +69,8 @@ def plot_images(x_list, nrows=1, ncols=-1, fig=None, vrange='equal',
         The number of subplot columns. If -1, it is computed by
         ``ceil(len(x_list)/nrows)`` (default). If both `nrows` and `ncols` are
         given, the value of `ncols` is ignored.
-    vrange : {'equal', 'individual'} or [list of ](float, float), optional
+    vrange : {``'equal'``, ``'individual'``} or [list of ](float, float),\
+             optional
         Value ranges for the colors of the images.
         If a string is passed, the range is auto-computed:
 
@@ -80,7 +82,7 @@ def plot_images(x_list, nrows=1, ncols=-1, fig=None, vrange='equal',
         If a tuple of floats is passed, it is used for all images.
         If a list of tuples of floats is passed, each tuple is used for one
         image.
-    cbar : {'one', 'many', 'auto', 'none'}, optional
+    cbar : {``'one'``, ``'many'``, ``'auto'``, ``'none'``}, optional
         Colorbar option.
         If ``cbar=='one'``, one colorbar is shown. Only possible if the value
         ranges used for the colors (cf. `vrange`) are the same for all images.
@@ -88,19 +90,26 @@ def plot_images(x_list, nrows=1, ncols=-1, fig=None, vrange='equal',
         If ``cbar=='auto'``, either ``'one'`` or ``'many'`` is chosen,
         depending on whether `vrange` is equal for all images.
         If ``cbar=='none'``, no colorbars are shown.
-    fig : matplotlib.figure.Figure, optional
-        The figure to plot the images in. If ``None``, a new figure is created.
+    fig : :class:`matplotlib.figure.Figure`, optional
+        The figure to plot the images in. If `None`, a new figure is created.
     kwargs : dict, optional
         Keyword arguments passed to `plot_image`, which in turn passes them to
         ``imshow``.
 
     Returns
     -------
-    im : ndarray of matplotlib.image.AxesImage
+    im : ndarray of :class:`matplotlib.image.AxesImage`
         The images that were plotted.
-    ax : ndarray of matplotlib.axes.Axes
+    ax : ndarray of :class:`matplotlib.axes.Axes`
         The axes the images were plotted in.
     """
+    try:
+        x_list = list(x_list)
+    except TypeError:
+        raise TypeError('x_list must be iterable. Pass a sequence or use '
+                        '`plot_image` to plot single images.')
+    for i in range(len(x_list)):
+        x_list[i] = np.asarray(x_list[i])
     if fig is None:
         fig = plt.figure()
     if nrows is None or nrows == -1:

@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 class DataPairs:
     """
-    Bundles `self.observations` with `self.ground_truth`.
+    Bundles :attr:`observations` with :attr:`ground_truth`.
 
     Attributes
     ----------
     observations : list of observation space elements
-        The observation, possibly distorted or low-dimensional.
-    ground_truth: list of reconstruction space elements or ``None``
-        The ground truth. May be replaced with a good quality reference. May
-        also be ``None``.
+        The observations, possibly distorted or low-dimensional.
+    ground_truth: list of reconstruction space elements or `None`
+        The ground truth data (may be replaced with good quality references).
+        If not known, it may be omitted (`None`).
     """
     def __init__(self, observations, ground_truth=None, name='',
                  description=''):
@@ -33,7 +33,7 @@ class DataPairs:
                     description=self.description))
 
     def __str__(self):
-        return ("DataPairs('{name}')".format(name=self.name) if self.name
+        return ("DataPairs '{name}'".format(name=self.name) if self.name
                 else self.__repr__())
 
     def __len__(self):

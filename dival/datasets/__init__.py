@@ -1,30 +1,42 @@
 # -*- coding: utf-8 -*-
-"""Implements datasets for training learned reconstructors.
+"""Implements datasets for training and evaluating learned reconstructors.
 
-The function `get_standard_dataset` returns fixed "standard" datasets with
-pairs of ground truth and observation samples.
-Currently the standard datasets are ``'ellipses'`` and ``'lidc_idri_dival'``.
+.. autosummary::
+    get_standard_dataset
+    Dataset
+    GroundTruthDataset
+    ObservationGroundTruthPairDataset
+    EllipsesDataset
+    LoDoPaBDataset
 
-The recommended way of defining custom datasets is as follows:
+The function :func:`.get_standard_dataset` returns fixed "standard" datasets
+with pairs of observation and ground truth samples.
+Currently the standard datasets are ``'ellipses'`` and ``'lodopab'``.
 
-    * define a `GroundTruthDataset` object (e.g. of type `EllipsesDataset`,
-      `LIDCIDRIDivalDataset` or a custom subclass)
+The class :class:`.ObservationGroundTruthPairDataset` can be used, either
+directly or via :meth:`.GroundTruthDataset.create_pair_dataset`, to create a
+custom dataset of pairs given a ground truth dataset and a forward operator.
+For example:
+
+    * define a :class:`.GroundTruthDataset` object (e.g. \
+      :class:`.EllipsesDataset`)
     * define a forward operator
-    * call the `create_pair_dataset` method of the dataset and pass the forward
-      operator as well as some noise specification if wanted
+    * call :meth:`~.GroundTruthDataset.create_pair_dataset` of the dataset and
+      pass the forward operator as well as some noise specification if wanted
 """
 from warnings import warn
+
+__all__ = ['get_standard_dataset', 'Dataset', 'GroundTruthDataset',
+           'ObservationGroundTruthPairDataset', 'EllipsesDataset',
+           'LoDoPaBDataset']
+
 from .standard import get_standard_dataset
 from .dataset import (Dataset, GroundTruthDataset,
                       ObservationGroundTruthPairDataset)
-from .ellipses.ellipses_dataset import EllipsesDataset
+from .ellipses_dataset import EllipsesDataset
 try:
-    from .lidc_idri_dival.lidc_idri_dival_dataset import (
-        LIDCIDRIDivalDataset)
+    from .lodopab_dataset import LoDoPaBDataset
 except FileNotFoundError as e:
-    warn('could not import LIDCIDRIDivalDataset because of the following '
+    __all__.remove('LoDoPaBDataset')
+    warn('could not import `LoDoPaBDataset` because of the following '
          'error:\n\n{}\n'.format(e))
-
-__all__ = ('get_standard_dataset', 'Dataset', 'GroundTruthDataset',
-           'ObservationGroundTruthPairDataset', 'EllipsesDataset',
-           'LIDCIDRIDivalDataset')

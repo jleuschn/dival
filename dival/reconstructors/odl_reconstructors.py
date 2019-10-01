@@ -2,9 +2,9 @@
 """Provides wrappers for reconstruction methods of odl."""
 from odl.tomo import fbp_op
 from odl.operator import Operator
-from odl.discr.discretization import DiscretizedSpaceElement
+from odl.space.pspace import ProductSpace
 from odl.solvers.iterative import iterative, statistical
-from dival import Reconstructor
+from dival import Reconstructor, IterativeReconstructor
 
 
 class FBPReconstructor(Reconstructor):
@@ -28,8 +28,7 @@ class FBPReconstructor(Reconstructor):
     """
     def __init__(self, ray_trafo, padding=True, hyper_params=None,
                  pre_processor=None, post_processor=None, **kwargs):
-        """Construct an FBP reconstructor.
-
+        """
         Parameters
         ----------
         ray_trafo : `odl.tomo.operators.RayTransform`
@@ -39,33 +38,31 @@ class FBPReconstructor(Reconstructor):
             See `odl.tomo.fbp_op` for details.
         pre_processor : callable, optional
             Callable that takes the observation and returns the sinogram that
-            is passed to the filtered backprojection operator.
+            is passed to the filtered back-projection operator.
         post_processor : callable, optional
-            Callable that takes the filtered backprojection and returns the
+            Callable that takes the filtered back-projection and returns the
             final reconstruction.
         """
-        super().__init__(hyper_params=hyper_params, **kwargs)
         self.ray_trafo = ray_trafo
         self.padding = padding
         self.pre_processor = pre_processor
         self.post_processor = post_processor
+        super().__init__(
+            reco_space=ray_trafo.domain, observation_space=ray_trafo.range,
+            hyper_params=hyper_params, **kwargs)
 
-    def reconstruct(self, observation):
+    def _reconstruct(self, observation, out):
         self.fbp_op = fbp_op(self.ray_trafo, padding=self.padding,
                              **self.hyper_params)
         if self.pre_processor is not None:
             observation = self.pre_processor(observation)
-        reconstruction = self.fbp_op(observation)
+        self.fbp_op(observation, out=out)
         if self.post_processor is not None:
-            reconstruction = self.post_processor(reconstruction)
-        return reconstruction
+            out[:] = self.post_processor(out)
 
 
-# TODO class IterativeReconstructor
-
-
-class CGReconstructor(Reconstructor):
-    """Reconstructor applying the conjugate gradient method.
+class CGReconstructor(IterativeReconstructor):
+    """Iterative reconstructor applying the conjugate gradient method.
 
     Attributes
     ----------
@@ -75,23 +72,23 @@ class CGReconstructor(Reconstructor):
         Initial value.
     niter : int
         Number of iterations.
-    callback : odl.solvers.util.callback.Callback
+    callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     op_is_symmetric : bool
         If ``False`` (default), the normal equations are solved. If ``True``,
         `op` is assumed to be self-adjoint and the system of equations is
         solved directly.
     """
-    def __init__(self, op, x0, niter, callback=None, op_is_symmetric=False):
-        """Construct a CG reconstructor.
-
+    def __init__(self, op, x0, niter, callback=None, op_is_symmetric=False,
+                 **kwargs):
+        """
         Calls `odl.solvers.iterative.iterative.conjugate_gradient_normal` (if
         ``op_is_symmetric == False``) or
         `odl.solvers.iterative.iterative.conjugate_gradient` (if
         ``op_is_symmetric == True``).
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         op : `odl.operator.Operator`
             The forward operator of the inverse problem.
             If ``op_is_symmetric == False`` (default), the call
@@ -102,33 +99,36 @@ class CGReconstructor(Reconstructor):
             Initial value.
         niter : int
             Number of iterations.
-        callback : odl.solvers.util.callback.Callback or callable, optional
+        callback : :class:`odl.solvers.util.callback.Callback`, optional
             Object that is called in each iteration.
         op_is_symmetric : bool, optional
             If ``False`` (default), the normal equations are solved. If
             ``True``, `op` is required to be self-adjoint and the system of
             equations is solved directly.
         """
-        super().__init__()
         self.op = op
         self.x0 = x0
         self.niter = niter
         self.callback = callback
         self.op_is_symmetric = op_is_symmetric
+        super().__init__(
+            reco_space=self.op.domain, observation_space=self.op.range,
+            **kwargs)
 
-    def reconstruct(self, observation):
-        x = self.x0.copy()
+    def _reconstruct(self, observation, out):
+        observation = self.observation_space.element(observation)
+        out[:] = self.x0
         if self.op_is_symmetric:
-            iterative.conjugate_gradient(self.op, x, observation,
+            iterative.conjugate_gradient(self.op, out, observation,
                                          self.niter, self.callback)
         else:
-            iterative.conjugate_gradient_normal(self.op, x, observation,
+            iterative.conjugate_gradient_normal(self.op, out, observation,
                                                 self.niter, self.callback)
-        return x
+        return out
 
 
-class GaussNewtonReconstructor(Reconstructor):
-    """Reconstructor applying the Gauss-Newton method.
+class GaussNewtonReconstructor(IterativeReconstructor):
+    """Iterative reconstructor applying the Gauss-Newton method.
 
     Attributes
     ----------
@@ -140,16 +140,15 @@ class GaussNewtonReconstructor(Reconstructor):
         Maximum number of iterations.
     zero_seq : iterable
         Zero sequence used for regularization.
-    callback : odl.solvers.util.callback.Callback
+    callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     """
-    def __init__(self, op, x0, niter, zero_seq=None, callback=None):
-        """Construct a Gauss-Newton reconstructor.
-
+    def __init__(self, op, x0, niter, zero_seq=None, callback=None, **kwargs):
+        """
         Calls `odl.solvers.iterative.iterative.gauss_newton`.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         op : `odl.operator.Operator`
             The forward operator of the inverse problem.
             The call ``op.derivative(x).adjoint`` must be valid.
@@ -159,28 +158,31 @@ class GaussNewtonReconstructor(Reconstructor):
             Maximum number of iterations.
         zero_seq : iterable, optional
             Zero sequence used for regularization.
-        callback : odl.solvers.util.callback.Callback or callable, optional
+        callback : :class:`odl.solvers.util.callback.Callback`, optional
             Object that is called in each iteration.
         """
-        super().__init__()
         self.op = op
         self.x0 = x0
         self.niter = niter
         self.zero_seq = zero_seq
         self.callback = callback
+        super().__init__(
+            reco_space=self.op.domain, observation_space=self.op.range,
+            **kwargs)
 
-    def reconstruct(self, observation):
-        x = self.x0.copy()
+    def _reconstruct(self, observation, out):
+        observation = self.observation_space.element(observation)
+        out[:] = self.x0
         kwargs = {'callback': self.callback}
         if self.zero_seq is not None:
             kwargs['zero_seq'] = self.zero_seq
-        iterative.gauss_newton(self.op, x, observation, self.niter,
+        iterative.gauss_newton(self.op, out, observation, self.niter,
                                **kwargs)
-        return x
+        return out
 
 
-class KaczmarzReconstructor(Reconstructor):
-    """Reconstructor applying Kaczmarz's method.
+class KaczmarzReconstructor(IterativeReconstructor):
+    """Iterative reconstructor applying Kaczmarz's method.
 
     Attributes
     ----------
@@ -197,19 +199,18 @@ class KaczmarzReconstructor(Reconstructor):
         Whether the order of the operators is randomized in each iteration.
     projection : callable
         Callable that can be used to modify the iterates in each iteration.
-    callback : odl.solvers.util.callback.Callback
+    callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     callback_loop : {'inner', 'outer'}
         Whether the `callback` should be called in the inner or outer loop.
     """
     def __init__(self, ops, x0, niter, omega=1, random=False, projection=None,
-                 callback=None, callback_loop='outer'):
-        """Construct a Kaczmarz reconstructor.
-
+                 callback=None, callback_loop='outer', **kwargs):
+        """
         Calls `odl.solvers.iterative.iterative.kaczmarz`.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         ops : sequence of `odl.Operator`
             The forward operators of the inverse problem.
             The call ``ops[i].derivative(x).adjoint`` must be valid for all i.
@@ -224,12 +225,11 @@ class KaczmarzReconstructor(Reconstructor):
             Whether the order of the operators is randomized in each iteration.
         projection : callable, optional
             Callable that can be used to modify the iterates in each iteration.
-        callback : odl.solvers.util.callback.Callback or callable, optional
+        callback : :class:`odl.solvers.util.callback.Callback`, optional
             Object that is called in each iteration.
         callback_loop : {'inner', 'outer'}
             Whether the `callback` should be called in the inner or outer loop.
         """
-        super().__init__()
         self.ops = ops
         self.x0 = x0
         self.niter = niter
@@ -238,17 +238,22 @@ class KaczmarzReconstructor(Reconstructor):
         self.random = random
         self.callback = callback
         self.callback_loop = callback_loop
+        super().__init__(
+            reco_space=self.ops[0].domain,
+            observation_space=ProductSpace(*(op.range for op in self.ops)),
+            **kwargs)
 
-    def reconstruct(self, observation):
-        x = self.x0.copy()
-        iterative.kaczmarz(self.ops, x, observation, self.niter,
+    def _reconstruct(self, observation, out):
+        observation = self.observation_space.element(observation)
+        out[:] = self.x0
+        iterative.kaczmarz(self.ops, out, observation, self.niter,
                            self.omega, self.projection, self.random,
                            self.callback, self.callback_loop)
-        return x
+        return out
 
 
-class LandweberReconstructor(Reconstructor):
-    """Reconstructor applying Landweber's method.
+class LandweberReconstructor(IterativeReconstructor):
+    """Iterative reconstructor applying Landweber's method.
 
     Attributes
     ----------
@@ -262,17 +267,16 @@ class LandweberReconstructor(Reconstructor):
         Relaxation parameter.
     projection : callable
         Callable that can be used to modify the iterates in each iteration.
-    callback : odl.solvers.util.callback.Callback
+    callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     """
     def __init__(self, op, x0, niter, omega=None, projection=None,
-                 callback=None):
-        """Construct a Landweber reconstructor.
-
+                 callback=None, **kwargs):
+        """
         Calls `odl.solvers.iterative.iterative.landweber`.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         op : `odl.operator.Operator`
             The forward operator of the inverse problem.
             The call ``op.derivative(x).adjoint`` must be valid.
@@ -285,26 +289,30 @@ class LandweberReconstructor(Reconstructor):
         projection : callable, optional
             Callable that can be used to modify the iterates in each iteration.
             One argument is passed and expected be modified in-place.
-        callback : odl.solvers.util.callback.Callback or callable, optional
+        callback : :class:`odl.solvers.util.callback.Callback`, optional
             Object that is called in each iteration.
         """
-        super().__init__()
         self.op = op
         self.x0 = x0
         self.niter = niter
         self.omega = omega
         self.projection = projection
         self.callback = callback
+        super().__init__(
+            reco_space=self.op.domain, observation_space=self.op.range,
+            **kwargs)
 
-    def reconstruct(self, observation):
-        x = self.x0.copy()
-        iterative.landweber(self.op, x, observation, self.niter,
+    def _reconstruct(self, observation, out):
+        observation = self.observation_space.element(observation)
+        out[:] = self.x0
+        iterative.landweber(self.op, out, observation, self.niter,
                             self.omega, self.projection, self.callback)
-        return x
+        return out
 
 
-class MLEMReconstructor(Reconstructor):
-    """Reconstructor applying Maximum Likelihood Expectation Maximization.
+class MLEMReconstructor(IterativeReconstructor):
+    """Iterative reconstructor applying Maximum Likelihood Expectation
+    Maximization.
 
     If multiple operators are given, Ordered Subsets MLEM is applied.
 
@@ -316,9 +324,9 @@ class MLEMReconstructor(Reconstructor):
         Initial value.
     niter : int
         Number of iterations.
-    noise : {'poisson'}, optional
+    noise : {'poisson'} or `None`
         Noise model determining the variant of MLEM.
-    callback : odl.solvers.util.callback.Callback
+    callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     sensitivities : float or ``op.domain`` `element-like`
         Usable with ``noise='poisson'``. The algorithm contains an ``A^T 1``
@@ -326,13 +334,12 @@ class MLEMReconstructor(Reconstructor):
         Default: ``op[i].adjoint(op[i].range.one())``
     """
     def __init__(self, op, x0, niter, noise='poisson', callback=None,
-                 sensitivities=None):
-        """Construct a (OS)MLEM reconstructor.
-
+                 sensitivities=None, **kwargs):
+        """
         Calls `odl.solvers.iterative.statistical.osmlem`.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         op : `odl.operator.Operator` or sequence of `odl.operator.Operator`
             The forward operator(s) of the inverse problem.
             If an operator sequence is given, Ordered Subsets MLEM is applied.
@@ -344,26 +351,32 @@ class MLEMReconstructor(Reconstructor):
             Noise model determining the variant of MLEM.
             For ``'poisson'``, the initial value of ``x`` should be
             non-negative.
-        callback : odl.solvers.util.callback.Callback or callable, optional
+        callback : :class:`odl.solvers.util.callback.Callback`, optional
             Object that is called in each iteration.
         sensitivities : float or ``op.domain`` `element-like`, optional
             Usable with ``noise='poisson'``. The algorithm contains an
             ``A^T 1`` term, if this parameter is given, it is replaced by it.
             Default: ``op[i].adjoint(op[i].range.one())``
         """
-        super().__init__()
-        self.op = [op] if isinstance(op, Operator) else op
+        self.os_mode = not isinstance(op, Operator)
+        self.op = op if self.os_mode else [op]
         self.x0 = x0
         self.niter = niter
         self.noise = noise
         self.callback = callback
         self.sensitivities = sensitivities
+        observation_space = (ProductSpace(*(op.range for op in self.op)) if
+                             self.os_mode else self.op[0].range)
+        super().__init__(
+            reco_space=self.op[0].domain, observation_space=observation_space,
+            **kwargs)
 
-    def reconstruct(self, observation):
-        x = self.x0.copy()
-        if isinstance(observation, DiscretizedSpaceElement):
+    def _reconstruct(self, observation, out):
+        out[:] = self.x0
+        observation = self.observation_space.element(observation)
+        if not self.os_mode:
             observation = [observation]
-        statistical.osmlem(self.op, x, observation, self.niter,
+        statistical.osmlem(self.op, out, observation, self.niter,
                            noise=self.noise, callback=self.callback,
                            sensitivities=self.sensitivities)
-        return x
+        return out

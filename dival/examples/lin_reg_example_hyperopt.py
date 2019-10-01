@@ -1,9 +1,11 @@
 import numpy as np
+from hyperopt import hp
+from odl.discr import uniform_discr
 from dival.datasets.dataset import Dataset
 from dival.evaluation import TaskTable
-from dival.measure import L2
-from odl.discr import uniform_discr
+from dival.measure import L2, PSNR
 from dival.reconstructors.regression_reconstructors import LinRegReconstructor
+from hyper_param_search import optimize_hyper_params
 
 # %% data
 observation_space = uniform_discr(-0.5, 6.5, 7)
@@ -40,25 +42,36 @@ class LinearDataset(Dataset):
 
 
 dataset = LinearDataset(observation_space, reco_space)
-test_data = dataset.get_data_pairs('test')
+validation_data = dataset.get_data_pairs('validation', 10)
+test_data = dataset.get_data_pairs('test', 10)
 
 # %% task table and reconstructors
 eval_tt = TaskTable()
 
 reconstructor = LinRegReconstructor(observation_space=observation_space,
                                     reco_space=reco_space)
+optimize_hyper_params(reconstructor,
+                      validation_data=validation_data,
+                      measure=L2,
+                      dataset=dataset,
+                      hyperopt_max_evals_retrain=100,
+                      HYPER_PARAMS_override={
+                          'l2_regularization': {
+                              'method': 'hyperopt',
+                              'hyperopt_options': {
+                                  'space': hp.loguniform('l2_regularization',
+                                                         0., np.log(1e9))
+                              }
+                          }})
+print('optimized l2 reg. coeff.: {}'.format(
+    reconstructor.hyper_params['l2_regularization']))
 
-rs = np.random.RandomState(0)
-eval_tt.append(
-    reconstructor=reconstructor, test_data=test_data, dataset=dataset,
-    options={'hyper_param_search': {
-                'measure': L2,
-                'hyperopt_max_evals_retrain': 10,
-                'hyperopt_rstate': rs}})
+eval_tt.append(reconstructor=reconstructor, test_data=test_data,
+               dataset=dataset, measures=[L2, PSNR])
 
 # %% run task table
 results = eval_tt.run()
-print(results.to_string(formatters={'reconstructor': lambda r: r.name}))
+print(results)
 
 # %% plot reconstructions
 fig = results.plot_all_reconstructions(test_index=range(3),

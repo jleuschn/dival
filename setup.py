@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from setuptools import setup, find_packages
+from dival import __version__
 
 setup(name='dival',
-      version='0.2',
+      version=__version__,
       description='Deep Inversion Validation Library',
       url='https://github.com/jleuschn/dival',
       author='Johannes Leuschner',
