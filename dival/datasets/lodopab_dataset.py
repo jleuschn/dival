@@ -15,7 +15,7 @@ from dival.util.constants import MU_MAX
 from dival.util.zenodo_download import download_zenodo_record, input_yes_no
 
 
-DATA_PATH = CONFIG['lodopab_dataset']['data_path']
+DATA_PATH = CONFIG['lodopab_dataset']['data_path'] + '_'
 NUM_SAMPLES_PER_FILE = 128
 PHOTONS_PER_PIXEL = 4096
 ORIG_MIN_PHOTON_COUNT = 0.1
@@ -32,10 +32,8 @@ def download_lodopab():
     if inp:
         DATA_PATH = inp
         set_config('lodopab_dataset/data_path', DATA_PATH)
-    raise Exception('The lodopab dataset is not published yet. We will update '
-                    'the library as soon as possible, inserting the record id '
-                    'here.')
-    ZENODO_RECORD_ID = ''  # TODO insert record id
+    os.makedirs(DATA_PATH, exist_ok=True)
+    ZENODO_RECORD_ID = '3384092'
     success = download_zenodo_record(ZENODO_RECORD_ID, DATA_PATH)
     print('download of LoDoPaB-CT dataset {}'.format('successful' if success
                                                      else 'failed'))
