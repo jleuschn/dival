@@ -27,10 +27,13 @@ class TaskTable:
         Tasks that shall be run. The fields of each dict are set from the
         parameters to :meth:`append` (or :meth:`append_all_combinations`). Cf.
         documentation of :meth:`append` for details.
+    results : :class:`ResultTable` or `None`
+        Results from the latest call to :meth:`run`.
     """
     def __init__(self, name=''):
         self.name = name
         self.tasks = []
+        self.results = None
 
     def run(self, save_reconstructions=True, show_progress='text'):
         """Run all tasks and return the results.
@@ -151,8 +154,8 @@ class TaskTable:
                     row['sub_task_ind'] = 0
                     row_list.append(row)
 
-        results = ResultTable(row_list)
-        return results
+        self.results = ResultTable(row_list)
+        return self.results
 
     def _run_task(self, reconstructor, test_data, measures, options, hp_choice,
                   save_reconstructions, save_iterates):
