@@ -105,14 +105,21 @@ class TaskTable:
                         param_values = [
                             hp_choices.get(k, [orig_hyper_params[k]]) for k in
                             keys_retrain_first]
-                        hp_choice_it = [
+                        hp_choice_list = [
                             dict(zip(keys_retrain_first, v)) for
                             v in product(*param_values)]
                     else:
-                        hp_choice_it = hp_choices
-                        for hp_choice in hp_choice_it:
+                        hp_choice_list = hp_choices
+                        for hp_choice in hp_choice_list:
                             _warn_if_invalid_keys(hp_choice.keys())
-                    for j, hp_choice in enumerate(hp_choice_it):
+                    for j, hp_choice in enumerate(
+                            tqdm(hp_choice_list, desc='sub-task',
+                                 file=orig_stdout,
+                                 disable=(show_progress != 'tqdm'),
+                                 leave=False)):
+                        if show_progress == 'text':
+                            print('sub-task {j}/{n} ...'
+                                  .format(j=j, n=len(hp_choice_list)))
                         train = (isinstance(reconstructor,
                                             LearnedReconstructor) and (
                             j == 0 or any(
