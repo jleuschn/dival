@@ -20,7 +20,12 @@ from dival.util.constants import MU_MAX
 from dival.util.zenodo_download import download_zenodo_record, input_yes_no
 
 
-DATA_PATH = CONFIG['lodopab_dataset']['data_path']
+try:
+    DATA_PATH = CONFIG['lodopab_dataset']['data_path']
+except Exception:
+    raise RuntimeError(
+        'Could not retrieve config value `lodopab_dataset/data_path`, '
+        'maybe the configuration (e.g. in ~/.dival/config.json) is corrupt.')
 NUM_SAMPLES_PER_FILE = 128
 PHOTONS_PER_PIXEL = 4096
 ORIG_MIN_PHOTON_COUNT = 0.1
