@@ -25,9 +25,13 @@ class FBPReconstructor(Reconstructor):
     ----------
     fbp_op : `odl.operator.Operator`
         The operator applying filtered back-projection.
+        It is computed in the constructor, and is recomputed for each
+        reconstruction if ``recompute_fbp_op == True`` (since parameters could
+        change).
     """
     def __init__(self, ray_trafo, padding=True, hyper_params=None,
-                 pre_processor=None, post_processor=None, **kwargs):
+                 pre_processor=None, post_processor=None,
+                 recompute_fbp_op=True, **kwargs):
         """
         Parameters
         ----------
@@ -42,6 +46,14 @@ class FBPReconstructor(Reconstructor):
         post_processor : callable, optional
             Callable that takes the filtered back-projection and returns the
             final reconstruction.
+        recompute_fbp_op : bool, optional
+            Whether :attr:`fbp_op` should be recomputed on each call to
+            :meth:`reconstruct`. Must be ``True`` (default) if changes to
+            :attr:`ray_trafo`, :attr:`hyper_params` or :attr:`padding` are
+            planned in order to use the updated values in :meth:`reconstruct`.
+            If none of these attributes will change, you may specify
+            ``recompute_fbp_op==False``, so :attr:`fbp_op` can be computed
+            only once, improving reconstruction time efficiency.
         """
         self.ray_trafo = ray_trafo
         self.padding = padding
@@ -52,10 +64,14 @@ class FBPReconstructor(Reconstructor):
             hyper_params=hyper_params, **kwargs)
         self.fbp_op = fbp_op(self.ray_trafo, padding=self.padding,
                              **self.hyper_params)
+        self.recompute_fbp_op = recompute_fbp_op
 
     def _reconstruct(self, observation, out):
         if self.pre_processor is not None:
             observation = self.pre_processor(observation)
+        if self.recompute_fbp_op:
+            self.fbp_op = fbp_op(self.ray_trafo, padding=self.padding,
+                                 **self.hyper_params)
         self.fbp_op(observation, out=out)
         if self.post_processor is not None:
             out[:] = self.post_processor(out)
