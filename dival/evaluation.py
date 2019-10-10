@@ -38,6 +38,9 @@ class TaskTable:
     def run(self, save_reconstructions=True, show_progress='text'):
         """Run all tasks and return the results.
 
+        The returned :class:`ResultTable` object is also stored as
+        :attr:`results`.
+
         Parameters
         ----------
         save_reconstructions : bool, optional
@@ -58,6 +61,11 @@ class TaskTable:
                     show a progress bar with ``tqdm``
                 `None`
                     do not show progress
+
+        Returns
+        -------
+        results : :class:`ResultTable`
+            The results.
         """
         row_list = []
         with std_out_err_redirect_tqdm(None if show_progress == 'tqdm' else

@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Provides `LoDoPaBDataset`."""
+"""Provides `LoDoPaBDataset`.
+
+Provides simple access to the `LoDoPaB-CT dataset
+<https://zenodo.org/record/3384092>`_ documented in an `ArXiv preprint
+<https://arxiv.org/abs/1910.01113>`_.
+"""
 import os
 from warnings import warn
 from math import ceil
@@ -53,8 +58,11 @@ def download_lodopab():
 
 class LoDoPaBDataset(Dataset):
     """
-    A simulated low dose CT dataset based on real reconstructions from the
-    `LIDC-IDRI
+    The LoDoPaB-CT dataset, which is documented in the preprint
+    `<https://arxiv.org/abs/1910.01113>`_ hosted on
+    `<https://zenodo.org/record/3384092>`_.
+    It is a simulated low dose CT dataset based on real reconstructions from
+    the `LIDC-IDRI
     <https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI>`_ dataset.
 
     The dataset contains 42895 pairs of images and projection data.

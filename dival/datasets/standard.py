@@ -36,8 +36,11 @@ def get_standard_dataset(name, **kwargs):
             discretization is different from the one of `ray_trafo`).
 
         ``'lodopab'``
-            A simulated low dose CT dataset based on real reconstructions from
-            the `LIDC-IDRI
+            The LoDoPaB-CT dataset, which is documented in the
+            preprint `<https://arxiv.org/abs/1910.01113>`_ hosted on
+            `<https://zenodo.org/record/3384092>`_.
+            It is a simulated low dose CT dataset based on real reconstructions
+            from the `LIDC-IDRI
             <https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI>`_
             dataset.
 
