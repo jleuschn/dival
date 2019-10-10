@@ -50,10 +50,10 @@ class FBPReconstructor(Reconstructor):
         super().__init__(
             reco_space=ray_trafo.domain, observation_space=ray_trafo.range,
             hyper_params=hyper_params, **kwargs)
-
-    def _reconstruct(self, observation, out):
         self.fbp_op = fbp_op(self.ray_trafo, padding=self.padding,
                              **self.hyper_params)
+
+    def _reconstruct(self, observation, out):
         if self.pre_processor is not None:
             observation = self.pre_processor(observation)
         self.fbp_op(observation, out=out)
