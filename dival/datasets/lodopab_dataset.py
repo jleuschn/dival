@@ -499,23 +499,3 @@ class LoDoPaBDataset(Dataset):
                                      .format(part, i)), 'r') as file:
                     file['data'].read_direct(gt_arr, slc_f, slc_d)
         return (obs_arr, gt_arr)
-
-    def create_torch_dataset(self, part='train'):
-        import torch
-
-        class LoDoPaBDatasetTorch(Dataset):
-            def __init__(self, part='train'):
-                self.part = part
-                self.dataset = LoDoPaBDataset()
-
-            def __len__(self):
-                return self.dataset.get_len(self.part)
-
-            def __getitem__(self, idx):
-                obs = np.empty((1,) + self.dataset.shape[0], dtype=np.float32)
-                gt = np.empty((1,) + self.dataset.shape[1], dtype=np.float32)
-                self.dataset.get_sample(idx, self.part, out=(obs, gt))
-                return torch.from_numpy(obs), torch.from_numpy(gt)
-
-        torch_dataset = LoDoPaBDatasetTorch(part=part)
-        return torch_dataset
