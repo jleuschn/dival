@@ -64,7 +64,12 @@ def get_standard_dataset(name, **kwargs):
         Supported parameters for the datasets are:
 
             ``'ellipses'``
-                no parameters
+                impl : {``'skimage'``, ``'astra_cpu'``, ``'astra_cuda'``},\
+                        optional
+                    Implementation passed to :class:`odl.tomo.RayTransform`
+                fixed_seeds : dict or bool, optional
+                    Seeds to use for random ellipse generation, passed to
+                    :class:`.EllipsesDataset`.
             ``'lodopab'``
                 observation_model : {``'post-log'``, ``'pre-log'``}, optional
                     The observation model to use. Default is ``'post-log'``.
@@ -83,7 +88,9 @@ def get_standard_dataset(name, **kwargs):
     """
     name = name.lower()
     if name == 'ellipses':
-        ellipses_dataset = EllipsesDataset(image_size=128)
+        fixed_seeds = kwargs.pop('fixed_seeds', False)
+        ellipses_dataset = EllipsesDataset(image_size=128,
+                                           fixed_seeds=fixed_seeds)
 
         NUM_ANGLES = 30
         # image shape for simulation
