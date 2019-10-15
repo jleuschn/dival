@@ -5,7 +5,7 @@ from dival.datasets.dataset import Dataset
 from dival.evaluation import TaskTable
 from dival.measure import L2, PSNR
 from dival.reconstructors.regression_reconstructors import LinRegReconstructor
-from hyper_param_search import optimize_hyper_params
+from dival.hyper_param_search import optimize_hyper_params
 
 # %% data
 observation_space = uniform_discr(-0.5, 6.5, 7)
@@ -22,6 +22,7 @@ class LinearDataset(Dataset):
         self.test_len = test_len
         self.observation_space = observation_space
         self.reco_space = reco_space
+        self.space = (self.observation_space, self.reco_space)
         self.shape = (self.observation_space.shape, self.reco_space.shape)
         self.forward_matrix = np.random.rand(self.shape[0][0],
                                              self.shape[1][0])

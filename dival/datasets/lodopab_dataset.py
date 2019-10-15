@@ -351,6 +351,8 @@ class LoDoPaBDataset(Dataset):
                              .format(index, part, len_part))
         if index < 0:
             index += len_part
+        if out is None:
+            out = (True, True)
         (out_observation, out_ground_truth) = out
         file_index = index // NUM_SAMPLES_PER_FILE
         index_in_file = index % NUM_SAMPLES_PER_FILE

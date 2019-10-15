@@ -44,6 +44,11 @@ class Dataset():
     """
     def __init__(self, space=None):
         """
+        The attributes that potentially should be set by the subclass are:
+        :attr:`space` (can also be set by argument), :attr:`shape`,
+        :attr:`train_len`, :attr:`validation_len`, :attr:`test_len`,
+        :attr:`random_access` and :attr:`num_elements_per_sample`.
+
         Parameters
         ----------
         space : [tuple of ] :class:`odl.space.base_tensors.TensorSpace`,\
@@ -72,7 +77,13 @@ class Dataset():
         """
         if self.supports_random_access():
             for i in range(self.get_len(part)):
-                yield self.get_sample(i, part=part)
+                sample = self.get_sample(i, part=part)
+                if self.get_num_elements_per_sample() == 1:
+                    sample = self.space.element(sample)
+                else:
+                    sample = tuple((space.element(s) for space, s in zip(
+                                        self.space, sample)))
+                yield sample
         else:
             raise NotImplementedError
 
@@ -136,14 +147,23 @@ class Dataset():
     def get_num_elements_per_sample(self):
         """Return number of elements per sample.
 
-        If :attr:`num_elements_per_sample` is not set, an attempt to
-        infer it by calling :meth:`get_shape` is made.
+        Returns :attr:`num_elements_per_sample` if it is set.
+        Otherwise, it is inferred from :attr:`space` (which is strongly
+        recommended to be set in every subclass).
+        If also :attr:`space` is not set, a :class:`NotImplementedError` is
+        raised.
+
+        Returns
+        -------
+        num_elements_per_sample : int
         """
         try:
             return self.num_elements_per_sample
         except AttributeError:
-            shape = self.get_shape()  # may raise NotImplementedError
-            return len(shape) if isinstance(shape, tuple) else 1
+            if self.space is not None:
+                return len(self.space) if isinstance(self.space, tuple) else 1
+            else:
+                raise NotImplementedError
 
     def get_data_pairs(self, part='train', n=None):
         """
