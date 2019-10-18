@@ -68,12 +68,12 @@ class LinRegReconstructor(LearnedReconstructor):
 
     def save_params(self, path):
         """
-        Save :attr:`weights` to file.
+        Save :attr:`weights` and :attr:`hyper_params` to files.
 
         Parameters
         ----------
         path : str
-            Filename (ending '.npy').
+            Folder.
         """
         if not os.path.isdir(path):
             os.mkdir(path)
@@ -83,12 +83,12 @@ class LinRegReconstructor(LearnedReconstructor):
 
     def load_params(self, path):
         """
-        Load :attr:`weights` from file.
+        Load :attr:`weights` and :attr:`hyper_params` from files.
 
         Parameters
         ----------
         path : str
-            Filename (ending '.npy').
+            Folder.
         """
         self.weights = np.load(os.path.join(path, 'weights.npy'))
         with open(os.path.join(path, 'hyper_params.json'), 'r') as file:

@@ -183,6 +183,7 @@ class LearnedReconstructor(Reconstructor):
 
     def save_params(self, path):
         """Save parameters to path.
+        Both hyper parameters and learned parameters should be included.
 
         Parameters
         ----------
@@ -196,11 +197,13 @@ class LearnedReconstructor(Reconstructor):
 
     def load_params(self, path):
         """Load parameters from path.
+        See also :meth:`save_params`.
 
         Parameters
         ----------
         path : str
-            Path at which the parameters are stored. C.f. `save_params`.
+            Path at which the parameters are stored. Depending on the
+            implementation, this may be a file path or a directory path.
         """
         raise NotImplementedError
 

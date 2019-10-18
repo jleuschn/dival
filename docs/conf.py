@@ -209,7 +209,7 @@ class MyPythonDomain(PythonDomain):
         orig_matches = PythonDomain.find_obj(self, env, modname, classname,
                                              name, type, searchmode)
         # longest match is supposed to be original definition
-        return sorted(orig_matches, key=lambda m: len(m))[-1:]
+        return sorted(orig_matches, key=lambda m: len(m[0]))[-1:]
 
 
 def setup(app):
