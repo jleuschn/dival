@@ -76,21 +76,26 @@ class Reconstructor:
                         configured by the dict ``'hyperopt_options'``.
 
             ``'grid_search_options'`` : dict
-                Option dict for grid search with the fields:
+                Option dict for grid search.
+
+                The following fields determine how ``'range'`` is sampled
+                (in case it is specified and no ``'choices'`` are specified):
 
                     ``'num_samples'`` : int, optional
-                        Number of values. Default: 10.
-                        Only relevant if ``'range'`` is specified and
-                        ``'choices'`` is not.
-                    ``'type'`` : {'linear'}, optional
+                        Number of values. Default: ``10``.
+                    ``'type'`` : {'linear', 'logarithmic'}, optional
                         Type of grid, i.e. distribution of the values.
                         Default: ``'linear'``.
-                        Only relevant if ``'range'`` is specified and
-                        ``'choices'`` is not.
                         Options are:
 
                             ``'linear'``
                                 Equidistant values in the ``'range'``.
+                            ``'logarithmic'``
+                                Values in the ``'range'`` that are equidistant
+                                in the log scale.
+                    ``'log_base'`` : int, optional
+                        Log-base that is used if ``'type'`` is
+                        ``'logarithmic'``. Default: ``10.``.
 
             ``'hyperopt_options'`` : dict
                 Option dict for ``'hyperopt'`` method with the fields:

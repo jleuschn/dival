@@ -159,6 +159,10 @@ def _optimize_hyper_params_impl(reconstructor, fn, params,
                     if grid_type == 'linear':
                         n = grid_search_options.get('num_samples', 10)
                         choices = np.linspace(range_[0], range_[1], n)
+                    elif grid_type == 'logarithmic':
+                        n = grid_search_options.get('num_samples', 10)
+                        b = grid_search_options.get('log_base', 10.)
+                        choices = np.logspace(range_[0], range_[1], n, base=b)
                     else:
                         raise ValueError(
                             "unknown grid type '{grid_type}' in {reco_cls}."

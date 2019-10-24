@@ -8,8 +8,8 @@ from dival.reconstructors.regression_reconstructors import LinRegReconstructor
 from dival.hyper_param_search import optimize_hyper_params
 
 # %% data
-observation_space = uniform_discr(-0.5, 6.5, 7)
-reco_space = uniform_discr(-0.5, 11.5, 12)
+observation_space = uniform_discr(-0.5, 69.5, 70)
+reco_space = uniform_discr(-0.5, 79.5, 71)
 
 np.random.seed(0)
 
@@ -37,7 +37,7 @@ class LinearDataset(Dataset):
         for _ in range(self.get_len(part=part)):
             x = rs.rand(self.shape[1][0])
             y = (np.dot(self.forward_matrix, x) +
-                 0.4 * rs.normal(scale=.1, size=self.shape[0]))
+                 rs.normal(scale=0.01, size=self.shape[0]))
             yield (self.observation_space.element(y),
                    self.reco_space.element(x))
 
@@ -46,34 +46,70 @@ dataset = LinearDataset(observation_space, reco_space)
 validation_data = dataset.get_data_pairs('validation', 10)
 test_data = dataset.get_data_pairs('test', 10)
 
-# %% task table and reconstructors
-eval_tt = TaskTable()
-
+# %% reconstructor and hyper parameter search
 reconstructor = LinRegReconstructor(observation_space=observation_space,
                                     reco_space=reco_space)
+
 optimize_hyper_params(reconstructor,
                       validation_data=validation_data,
                       measure=L2,
                       dataset=dataset,
-                      hyperopt_max_evals_retrain=100,
+                      hyperopt_max_evals_retrain=10,
                       HYPER_PARAMS_override={
                           'l2_regularization': {
                               'method': 'hyperopt',
                               'hyperopt_options': {
-                                  'space': hp.loguniform('l2_regularization',
-                                                         0., np.log(1e9))
+                                  'space': hp.loguniform(
+                                      'l2_regularization',
+                                      np.log(.001), np.log(2.))
                               }
                           }})
+
+# =============================================================================
+# # alternative method: 'grid_search'
+# optimize_hyper_params(reconstructor,
+#                       validation_data=validation_data,
+#                       measure=L2,
+#                       dataset=dataset,
+#                       HYPER_PARAMS_override={
+#                           'l2_regularization': {
+#                               'method': 'grid_search',
+#                               'range': [0., 2.],
+#                               'grid_search_options': {
+#                                   'num_samples': 10
+#                               }
+#                           }})
+# =============================================================================
+
+# =============================================================================
+# # alternative method: logarithmic 'grid_search'
+# optimize_hyper_params(reconstructor,
+#                       validation_data=validation_data,
+#                       measure=L2,
+#                       dataset=dataset,
+#                       HYPER_PARAMS_override={
+#                           'l2_regularization': {
+#                               'method': 'grid_search',
+#                               'range': [0., 2.],
+#                               'grid_search_options': {
+#                                   'type': 'logarithmic',
+#                                   'num_samples': 10
+#                               }
+#                           }})
+# =============================================================================
+
 print('optimized l2 reg. coeff.: {}'.format(
     reconstructor.hyper_params['l2_regularization']))
 
+
+# %% task table
+eval_tt = TaskTable()
 eval_tt.append(reconstructor=reconstructor, test_data=test_data,
                dataset=dataset, measures=[L2, PSNR])
 
-# %% run task table
 results = eval_tt.run()
 print(results)
 
 # %% plot reconstructions
-fig = results.plot_all_reconstructions(test_index=range(3),
-                                       fig_size=(9, 4), vrange='individual')
+fig = results.plot_reconstruction(0, test_ind=range(3),
+                                  fig_size=(9, 4), vrange='individual')
