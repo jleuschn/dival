@@ -2,6 +2,7 @@
 class DataPairs:
     """
     Bundles :attr:`observations` with :attr:`ground_truth`.
+    Implements :meth:`__getitem__` and :meth:`__len__`.
 
     Attributes
     ----------
@@ -36,5 +37,23 @@ class DataPairs:
         return ("DataPairs '{name}'".format(name=self.name) if self.name
                 else self.__repr__())
 
+    def __getitem__(self, idx):
+        """Return data pair(s).
+
+        Parameters
+        ----------
+        idx : index supported by list
+            The index that is applied to :attr:`observations` and
+            :attr:`ground_truth`.
+
+        Returns
+        -------
+        pair : tuple of odl elements or tuple of lists of odl elements
+            The pair of data.
+        """
+        return (self.observations[idx], self.ground_truth[idx])
+
     def __len__(self):
+        """Return the length.
+        """
         return len(self.observations)
