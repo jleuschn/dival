@@ -96,7 +96,7 @@ class Measure(ABC):
     def __call__(self, reconstruction, ground_truth):
         """Call :meth:`apply`.
         """
-        return self.apply(self, reconstruction, ground_truth)
+        return self.apply(reconstruction, ground_truth)
 
     @classmethod
     def get_by_short_name(cls, short_name):
