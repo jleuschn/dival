@@ -17,9 +17,12 @@ random states instead of seeds.
 
 from __future__ import print_function, division, absolute_import
 import numpy as np
-
-from odl.util import NumpyRandomSeed
-
+import odl
+from packaging import version
+if version.parse(odl.__version__) < version.parse('1.0.0.dev0'):
+    from odl.util import NumpyRandomSeed as npy_random_seed
+else:
+    from odl.util import npy_random_seed
 
 __all__ = ('white_noise', 'poisson_noise', 'salt_pepper_noise',
            'uniform_noise')
@@ -68,7 +71,7 @@ def white_noise(space, mean=0, stddev=1, seed=None, random_state=None):
         random = random_state
         global_seed = None
 
-    with NumpyRandomSeed(global_seed):
+    with npy_random_seed(global_seed):
         if isinstance(space, ProductSpace):
             values = [white_noise(subspace, mean, stddev)
                       for subspace in space]
@@ -132,7 +135,7 @@ def uniform_noise(space, low=0, high=1, seed=None, random_state=None):
         random = random_state
         global_seed = None
 
-    with NumpyRandomSeed(global_seed):
+    with npy_random_seed(global_seed):
         if isinstance(space, ProductSpace):
             values = [uniform_noise(subspace, low, high)
                       for subspace in space]
@@ -198,7 +201,7 @@ def poisson_noise(intensity, seed=None, random_state=None):
         random = random_state
         global_seed = None
 
-    with NumpyRandomSeed(global_seed):
+    with npy_random_seed(global_seed):
         if isinstance(intensity.space, ProductSpace):
             values = [poisson_noise(subintensity)
                       for subintensity in intensity]
@@ -274,7 +277,7 @@ def salt_pepper_noise(vector, fraction=0.05, salt_vs_pepper=0.5,
         random = random_state
         global_seed = None
 
-    with NumpyRandomSeed(global_seed):
+    with npy_random_seed(global_seed):
         if isinstance(vector.space, ProductSpace):
             values = [salt_pepper_noise(subintensity, fraction, salt_vs_pepper,
                                         low_val, high_val)
