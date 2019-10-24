@@ -7,3 +7,5 @@ hyperopt
 pydicom
 tqdm
 matplotlib
+h5py
+requests
