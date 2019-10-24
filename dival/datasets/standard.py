@@ -67,6 +67,14 @@ def get_standard_dataset(name, **kwargs):
                 impl : {``'skimage'``, ``'astra_cpu'``, ``'astra_cuda'``},\
                         optional
                     Implementation passed to :class:`odl.tomo.RayTransform`
+                normalize_ray_trafo : bool, optional
+                    Whether to normalize the forward operator by its op-norm.
+                    Default is `False`.
+                    If `True`, the observation values are divided by
+                    ``opnorm = dataset.ray_trafo.norm(estimate=True)``, so
+                    e.g. FBP requires to apply
+                    ``(opnorm * fbp_op(dataset.ray_trafo))(observation)`` in
+                    order obtain the original image value scale.
                 fixed_seeds : dict or bool, optional
                     Seeds to use for random ellipse generation, passed to
                     :class:`.EllipsesDataset`.
@@ -110,6 +118,10 @@ def get_standard_dataset(name, **kwargs):
         impl = kwargs.pop('impl', 'astra_cuda')
         ray_trafo = odl.tomo.RayTransform(space, geometry, impl=impl)
 
+        def get_reco_ray_trafo(impl=impl):
+            return odl.tomo.RayTransform(reco_space, reco_geometry, impl=impl)
+        reco_ray_trafo = get_reco_ray_trafo(impl=impl)
+
         class _ResizeOperator(odl.Operator):
             def __init__(self):
                 super().__init__(reco_space, space)
@@ -117,10 +129,15 @@ def get_standard_dataset(name, **kwargs):
             def _call(self, x, out):
                 out.assign(space.element(resize(x, IM_SHAPE, order=1)))
 
-        # Ensure operator has fixed operator norm for scale invariance
-        opnorm = odl.power_method_opnorm(ray_trafo)
+        # forward operator
         resize_op = _ResizeOperator()
-        forward_op = (1 / opnorm) * ray_trafo * resize_op
+        forward_op = ray_trafo * resize_op
+
+        normalize_ray_trafo = kwargs.pop('normalize_ray_trafo', False)
+        if normalize_ray_trafo:
+            # normalize by op-norm of reco_ray_trafo (128x128)
+            opnorm = reco_ray_trafo.norm(estimate=True)
+            forward_op = (1 / opnorm) * forward_op
 
         dataset = ellipses_dataset.create_pair_dataset(
             forward_op=forward_op, noise_type='white',
@@ -128,11 +145,8 @@ def get_standard_dataset(name, **kwargs):
                           'stddev': 0.05},
             noise_seeds={'train': 1, 'validation': 2, 'test': 3})
 
-        def get_ray_trafo(impl=impl):
-            return odl.tomo.RayTransform(reco_space, reco_geometry, impl=impl)
-
-        dataset.get_ray_trafo = get_ray_trafo
-        dataset.ray_trafo = get_ray_trafo(impl=impl)
+        dataset.get_ray_trafo = get_reco_ray_trafo
+        dataset.ray_trafo = reco_ray_trafo
 
     elif name == 'lodopab':
         dataset = LoDoPaBDataset(**kwargs)

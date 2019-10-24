@@ -131,7 +131,8 @@ class TaskTable:
                         train = (isinstance(reconstructor,
                                             LearnedReconstructor) and (
                             j == 0 or any(
-                                (hp_choice[k] != reconstructor.hyper_params[k]
+                                (hp_choice.get(k, orig_hyper_params[k]) !=
+                                 reconstructor.hyper_params[k]
                                  for k in retrain_param_keys))))
                         reconstructor.hyper_params = orig_hyper_params.copy()
                         reconstructor.hyper_params.update(hp_choice)
@@ -567,6 +568,8 @@ class ResultTable:
         elif isinstance(measures, Measure):
             measures = [measures]
         fig, ax = plt.subplots(len(measures), 1, gridspec_kw=gridspec_kw)
+        if not isinstance(ax, np.ndarray):
+            ax = np.array([ax])
         if fig_size is not None:
             fig.set_size_inches(fig_size)
         fig.suptitle('convergence of {}'.format(row['reconstructor'].name))
