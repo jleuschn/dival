@@ -9,3 +9,4 @@ tqdm
 matplotlib
 h5py
 requests
+packaging
