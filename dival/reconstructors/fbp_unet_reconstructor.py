@@ -4,6 +4,7 @@ Provides the learned :class:`FBPUNetReconstructor` for the application of CT.
 """
 import copy
 from warnings import warn
+from math import ceil
 import numpy as np
 from odl.tomo import fbp_op
 from tqdm import tqdm
@@ -179,6 +180,20 @@ class FBPDataset(Dataset):
 
 
 class FBPUNetReconstructor(LearnedReconstructor):
+    HYPER_PARAMS = {
+        'scales': {
+            'default': 5,
+            'retrain': True
+        },
+        'epochs': {
+            'default': 20,
+            'retrain': True
+        },
+        'batch_size': {
+            'default': 64,
+            'retrain': True
+        }
+    }
     """
     CT Reconstructor applying filtered back-projection followed by a
     postprocessing U-Net (cf. [1]_).
@@ -197,7 +212,7 @@ class FBPUNetReconstructor(LearnedReconstructor):
            `doi:10.1109/CVPR.2018.00984
            <https://doi.org/10.1109/CVPR.2018.00984>`_
     """
-    def __init__(self, ray_trafo, scales=5, epochs=20, batch_size=64,
+    def __init__(self, ray_trafo, scales=None, epochs=None, batch_size=None,
                  num_data_loader_workers=8, use_cuda=True, show_pbar=True,
                  fbp_impl='astra_cuda', **kwargs):
         """
@@ -205,17 +220,17 @@ class FBPUNetReconstructor(LearnedReconstructor):
         ----------
         ray_trafo : :class:`odl.tomo.RayTransform`
             Ray transform from which the FBP operator is constructed.
-        scales : int
-            Number of scales in the U-Net.
-        epochs : int
-            Number of epochs to train.
-        batch_size : int
-            Batch size.
-        num_data_loader_workers : int
+        scales : int, optional
+            Number of scales in the U-Net (a hyper parameter).
+        epochs : int, optional
+            Number of epochs to train (a hyper parameter).
+        batch_size : int, optional
+            Batch size (a hyper parameter).
+        num_data_loader_workers : int, optional
             Number of parallel workers to use for loading data.
-        use_cuda : bool
+        use_cuda : bool, optional
             Whether to use cuda for the U-Net.
-        show_pbar : bool
+        show_pbar : bool, optional
             Whether to show tqdm progress bars during the epochs.
         fbp_impl : str, optional
             The backend implementation passed to
@@ -225,17 +240,48 @@ class FBPUNetReconstructor(LearnedReconstructor):
         """
         self.ray_trafo = ray_trafo
         self.fbp_op = fbp_op(self.ray_trafo)
-        self.epochs = epochs
-        self.batch_size = batch_size
         self.num_data_loader_workers = num_data_loader_workers
         self.use_cuda = use_cuda
         self.show_pbar = show_pbar
         self.fbp_impl = fbp_impl
-        tensor_type = (torch.cuda.FloatTensor if self.use_cuda else
-                       torch.FloatTensor)
-        self.net = get_skip_model(scales=scales).type(tensor_type)
         super().__init__(reco_space=self.ray_trafo.domain,
                          observation_space=self.ray_trafo.range, **kwargs)
+        if epochs is not None:
+            self.epochs = epochs
+            if kwargs.get('hyper_params', {}).get('epochs') is not None:
+                warn("hyper parameter 'epochs' overridden by constructor argument")
+        if batch_size is not None:
+            self.batch_size = batch_size
+            if kwargs.get('hyper_params', {}).get('batch_size') is not None:
+                warn("hyper parameter 'batch_size' overridden by constructor argument")
+        if scales is not None:
+            self.scales = scales
+            if kwargs.get('hyper_params', {}).get('scales') is not None:
+                warn("hyper parameter 'scales' overridden by constructor argument")
+        
+    def get_epochs(self):
+        return self.hyper_params['epochs']
+        
+    def set_epochs(self, epochs):
+        self.hyper_params['epochs'] = epochs
+
+    epochs = property(get_epochs, set_epochs)
+        
+    def get_batch_size(self):
+        return self.hyper_params['batch_size']
+        
+    def set_batch_size(self, batch_size):
+        self.hyper_params['batch_size'] = batch_size
+
+    batch_size = property(get_batch_size, set_batch_size)
+        
+    def get_scales(self):
+        return self.hyper_params['scales']
+        
+    def set_scales(self, scales):
+        self.hyper_params['scales'] = scales
+
+    scales = property(get_scales, set_scales)
 
     def train(self, dataset):
         try:
@@ -254,6 +300,10 @@ class FBPUNetReconstructor(LearnedReconstructor):
         fbp_dataset_validation = self.fbp_dataset.create_torch_dataset(
             part='validation', reshape=((1,) + self.fbp_dataset.shape[0],
                                         (1,) + self.fbp_dataset.shape[1]))
+        
+        ttype = torch.cuda.FloatTensor if self.use_cuda else torch.FloatTensor
+        self.net = get_skip_model(scales=self.scales).type(tensor_type)
+        self.net = nn.DataParallel(self.net)
 
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.Adam(self.net.parameters(), lr=0.01)
@@ -274,8 +324,6 @@ class FBPUNetReconstructor(LearnedReconstructor):
 
         best_model_wts = copy.deepcopy(self.net.state_dict())
         best_psnr = 0
-
-        self.net = nn.DataParallel(self.net)
 
         device = (torch.device('cuda:0') if self.use_cuda else
                   torch.device('cpu'))
@@ -337,7 +385,8 @@ class FBPUNetReconstructor(LearnedReconstructor):
 
                         batch_id += 1
 
-                    epoch_psnr = running_psnr / dataset_sizes[phase]
+                    num_steps = ceil(dataset_sizes[phase] / self.batch_size)
+                    epoch_psnr = running_psnr / num_steps
 
                     # deep copy the model
                     if phase == 'validation' and epoch_psnr > best_psnr:
@@ -380,9 +429,16 @@ class FBPUNetReconstructor(LearnedReconstructor):
         filename : str
             Filename (ending ``.pt``).
         """
+        ttype = torch.cuda.FloatTensor if self.use_cuda else torch.FloatTensor
+        self.net = get_skip_model(scales=self.scales).type(ttype)
+        self.net = nn.DataParallel(self.net)
         map_location = 'cuda:0' if self.use_cuda else 'cpu'
-        self.net.load_state_dict(torch.load(filename,
-                                            map_location=map_location))
+        state_dict = torch.load(filename, map_location=map_location)
+        # backwards-compatibility with non-data_parallel weights
+        data_parallel = list(state_dict.keys())[0].startswith('module.')
+        if not data_parallel:
+            state_dict = {('module.' + k): v for k, v in state_dict.items()}
+        self.net.load_state_dict(state_dict)
 
 
 def get_skip_model(scales=5, skip=4):
