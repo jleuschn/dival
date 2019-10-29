@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-__version__ = '0.3.2'
+import os
+with open(os.path.join(os.path.split(__file__)[0], '..',
+                       'VERSION')) as version_f:
+    __version__ = version_f.read().strip()
 
 from .config import CONFIG, get_config, set_config
 from .data import DataPairs

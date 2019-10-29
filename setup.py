@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from setuptools import setup, find_packages
-from dival import __version__
+import os
+with open(os.path.join(os.path.split(__file__)[0], 'VERSION')) as version_f:
+    version = version_f.read().strip()
 
 setup(name='dival',
-      version=__version__,
+      version=version,
       description='Deep Inversion Validation Library',
       url='https://github.com/jleuschn/dival',
       author='Johannes Leuschner',
