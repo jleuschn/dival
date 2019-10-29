@@ -451,6 +451,8 @@ class LoDoPaBDataset(Dataset):
                              .format(key, part, len_part))
         range_files = range(range_[0] // NUM_SAMPLES_PER_FILE,
                             range_[-1] // NUM_SAMPLES_PER_FILE + 1)
+        if out is None:
+            out = (True, True)
         (out_observation, out_ground_truth) = out
         # compute slice objects
         slices_files = []
