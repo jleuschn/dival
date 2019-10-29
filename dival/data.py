@@ -50,8 +50,12 @@ class DataPairs:
         -------
         pair : tuple of odl elements or tuple of lists of odl elements
             The pair of data.
+            If `idx` is an integer, a tuple is returned.
+            If `idx` selects multiple entries, a list of tuples is returned.
         """
-        return (self.observations[idx], self.ground_truth[idx])
+        if isinstance(idx, int):
+            return (self.observations[idx], self.ground_truth[idx])
+        return list(zip(self.observations[idx], self.ground_truth[idx]))
 
     def __len__(self):
         """Return the length.
