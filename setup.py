@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from setuptools import setup, find_packages
 import os
-with open(os.path.join(os.path.split(__file__)[0], 'VERSION')) as version_f:
+with open(os.path.join(os.path.split(__file__)[0], 'dival',
+                       'VERSION')) as version_f:
     version = version_f.read().strip()
 
 setup(name='dival',
@@ -23,4 +24,5 @@ setup(name='dival',
           'tqdm',
           'matplotlib'
       ],
+      include_package_data=True,
       zip_safe=False)

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
-with open(os.path.join(os.path.split(__file__)[0], '..',
-                       'VERSION')) as version_f:
+with open(os.path.join(os.path.split(__file__)[0], 'VERSION')) as version_f:
     __version__ = version_f.read().strip()
 
 from .config import CONFIG, get_config, set_config
