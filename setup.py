@@ -2,7 +2,7 @@
 from setuptools import setup, find_packages
 
 version = {}
-with open("...sample/version.py") as fp:
+with open('dival/version.py') as fp:
     exec(fp.read(), version)
 VERSION = version['version']
 
