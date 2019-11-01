@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 from setuptools import setup, find_packages
-import os
 
-VERSION = '0.3.4'
-with open(os.path.join(os.path.split(__file__)[0], 'dival',
-                       'VERSION'), 'w') as version_f:
-    version_f.write(VERSION)
+version = {}
+with open("...sample/version.py") as fp:
+    exec(fp.read(), version)
+VERSION = version['version']
 
 setup(name='dival',
       version=VERSION,
