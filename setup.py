@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 version = {}
 with open('dival/version.py') as fp:
     exec(fp.read(), version)
-VERSION = version['version']
+VERSION = version['__version__']
 
 setup(name='dival',
       version=VERSION,
