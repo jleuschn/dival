@@ -24,7 +24,10 @@ setup(name='dival',
           'hyperopt',
           'pydicom',
           'tqdm',
-          'matplotlib'
+          'matplotlib',
+          'h5py',
+          'requests',
+          'packaging'
       ],
       include_package_data=True,
       zip_safe=False)
