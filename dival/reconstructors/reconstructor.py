@@ -225,7 +225,7 @@ class IterativeReconstructor(Reconstructor):
         Callback to be called after each iteration.
     """
     def __init__(self, callback=None, **kwargs):
-        self.callback = None
+        self.callback = callback
         super().__init__(**kwargs)
 
 
