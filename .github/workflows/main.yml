@@ -9,6 +9,8 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - uses: actions/setup-python@v1
+        with:
+          python-version: 3.7
       - run: sudo apt-get install libhdf5-dev
       - run: pip install Cython numpy pkgconfig
       - name: Build
