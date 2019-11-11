@@ -1,0 +1,13 @@
+name: Tests
+# This workflow is triggered on pushes to the repository.
+on: [push]
+
+jobs:
+  build:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install
+        run: python setup.py install
+      - name: Tests
+        run: python -m unittest
