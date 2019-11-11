@@ -7,6 +7,7 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@test
       - uses: actions/setup-python@v1
       - name: Tests
-        run: python -m unittest discover test
+        run: python -m unittest
