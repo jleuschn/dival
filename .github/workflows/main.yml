@@ -17,5 +17,6 @@ jobs:
         run: python setup.py build
       - name: Install
         run: python setup.py install
+      - run: ls -la
       - name: Tests
-        run: python -m unittest
+        run: python -m unittest dival/test
