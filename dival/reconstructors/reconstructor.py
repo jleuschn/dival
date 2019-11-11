@@ -216,7 +216,7 @@ class LearnedReconstructor(Reconstructor):
 class IterativeReconstructor(Reconstructor):
     """Iterative reconstructor base class.
 
-    Subclasses should call ``self.callback()`` after each iteration in
+    Subclasses should call :attr:`callback` after each iteration in
     ``self.reconstruct``.
 
     Attributes
@@ -225,8 +225,40 @@ class IterativeReconstructor(Reconstructor):
         Callback to be called after each iteration.
     """
     def __init__(self, callback=None, **kwargs):
+        """
+        Parameters
+        ----------
+        callback : ``odl.solvers.util.callback.Callback``, optional
+            Callback to be called after each iteration.
+        """
         self.callback = callback
         super().__init__(**kwargs)
+
+    def reconstruct(self, observation, out=None, callback=None):
+        """Reconstruct input data from observation data.
+
+        Same as :meth:`Reconstructor.reconstruct`, but with additional optional
+        `callback` parameter.
+
+        Parameters
+        ----------
+        observation : :attr:`observation_space` element-like
+            The observation data.
+        out : :attr:`reco_space` element-like, optional
+            Array to which the result is written (in-place evaluation).
+            If `None`, a new array is created (out-of-place evaluation).
+        callback : ``odl.solvers.util.callback.Callback``, optional
+            New value of :attr:`callback`. If `None`, the value of
+            :attr:`callback` is not modified.
+
+        Returns
+        -------
+        reconstruction : :attr:`reco_space` element or `out`
+            The reconstruction.
+        """
+        if callback is not None:
+            self.callback = callback
+        return super().reconstruct(observation, out=out)
 
 
 class FunctionReconstructor(Reconstructor):

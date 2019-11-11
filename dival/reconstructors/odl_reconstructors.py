@@ -125,11 +125,10 @@ class CGReconstructor(IterativeReconstructor):
         self.op = op
         self.x0 = x0
         self.niter = niter
-        self.callback = callback
         self.op_is_symmetric = op_is_symmetric
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            **kwargs)
+            callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -181,10 +180,9 @@ class GaussNewtonReconstructor(IterativeReconstructor):
         self.x0 = x0
         self.niter = niter
         self.zero_seq = zero_seq
-        self.callback = callback
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            **kwargs)
+            callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -252,12 +250,11 @@ class KaczmarzReconstructor(IterativeReconstructor):
         self.omega = omega
         self.projection = projection
         self.random = random
-        self.callback = callback
         self.callback_loop = callback_loop
         super().__init__(
             reco_space=self.ops[0].domain,
             observation_space=ProductSpace(*(op.range for op in self.ops)),
-            **kwargs)
+            callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -313,10 +310,9 @@ class LandweberReconstructor(IterativeReconstructor):
         self.niter = niter
         self.omega = omega
         self.projection = projection
-        self.callback = callback
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            **kwargs)
+            callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -379,13 +375,12 @@ class MLEMReconstructor(IterativeReconstructor):
         self.x0 = x0
         self.niter = niter
         self.noise = noise
-        self.callback = callback
         self.sensitivities = sensitivities
         observation_space = (ProductSpace(*(op.range for op in self.op)) if
                              self.os_mode else self.op[0].range)
         super().__init__(
             reco_space=self.op[0].domain, observation_space=observation_space,
-            **kwargs)
+            callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         out[:] = self.x0
