@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v1
       - uses: actions/setup-python@v1
       - name: Prepare
-        run: pip install Cython
+        run: pip install Cython numpy
       - name: Build
         run: python setup.py build
       - name: Install
