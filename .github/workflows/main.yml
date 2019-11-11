@@ -18,4 +18,4 @@ jobs:
       - name: Install
         run: python setup.py install
       - name: Tests
-        run: python -m unittest test
+        run: python -m unittest discover test
