@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v1
       - uses: actions/setup-python@v1
       - name: Prepare
-        run: apt-get install python-pip --assume-yes
+        run: pip install Cython
       - name: Build
         run: python setup.py build
       - name: Install
