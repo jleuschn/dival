@@ -7,8 +7,6 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     steps:
-      - run: ls
-      - name: Install
-        run: python setup.py install
+      - uses: actions/setup-python@v1
       - name: Tests
         run: python -m unittest
