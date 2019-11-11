@@ -9,8 +9,8 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - uses: actions/setup-python@v1
-      - name: Prepare
-        run: sudo apt-get install python-pip
+      - run: sudo apt-get install libhdf5-dev
+      - run: pip install Cython numpy pkgconfig
       - name: Build
         run: python setup.py build
       - name: Install
