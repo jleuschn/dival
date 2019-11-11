@@ -9,4 +9,4 @@ jobs:
     steps:
       - uses: actions/setup-python@v1
       - name: Tests
-        run: python -m unittest
+        run: python -m unittest discover test
