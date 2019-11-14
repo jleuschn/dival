@@ -22,11 +22,15 @@ CONFIG = {
 Global configuration dict.
 
 Holds the current configuration of the library. On ``import dival``, the
-configuration is loaded from ~/.dival/config.json.
+configuration is loaded from ``~/.dival/config.json``.
 """
 
 # configuration loaded from config file, overrides hardcoded configuration
 CONFIG_FILENAME = os.path.normpath(os.path.expanduser('~/.dival/config.json'))
+"""
+Path of the configuration file.
+The value is given by ``'~/.dival/config.json'``, expanded and normalized.
+"""
 
 # automatically write config file if not existing (e.g., on first import)
 if not os.path.isfile(CONFIG_FILENAME):
