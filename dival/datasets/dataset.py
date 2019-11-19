@@ -11,6 +11,10 @@ from dival.util.odl_utility import NoiseOperator
 class Dataset():
     """Dataset base class.
 
+    Subclasses must either implement :meth:`generator` or provide random access
+    by implementing :meth:`get_sample` and :meth:`get_samples` (which then
+    should be indicated by setting the attribute ``random_access = True``).
+
     Attributes
     ----------
     space : [tuple of ] :class:`odl.space.base_tensors.TensorSpace` or `None`
@@ -64,6 +68,9 @@ class Dataset():
     def generator(self, part='train'):
         """Yield data.
 
+        The default implementation calls :meth:`get_sample` if the dataset
+        implements it (i.e., supports random access).
+
         Parameters
         ----------
         part : {``'train'``, ``'validation'``, ``'test'``}, optional
@@ -111,9 +118,8 @@ class Dataset():
             return self.get_validation_len()
         elif part == 'test':
             return self.get_test_len()
-        else:
-            raise ValueError("dataset part must be 'train', "
-                             "'validation' or 'test', not '{}'".format(part))
+        raise ValueError("dataset part must be 'train', "
+                         "'validation' or 'test', not '{}'".format(part))
 
     def get_train_len(self):
         """Return the number of samples the train generator will yield."""
@@ -138,10 +144,25 @@ class Dataset():
             raise NotImplementedError
 
     def get_shape(self):
-        """Return the shape of each element."""
+        """Return the shape of each element.
+
+        Returns :attr:`shape` if it is set.
+        Otherwise, it is inferred from :attr:`space` (which is strongly
+        recommended to be set in every subclass).
+        If also :attr:`space` is not set, a :class:`NotImplementedError` is
+        raised.
+
+        Returns
+        -------
+        shape : [tuple of ] tuple"""
         try:
             return self.shape
         except AttributeError:
+            if self.space is not None:
+                if self.get_num_elements_per_sample() == 1:
+                    return self.space.shape
+                else:
+                    return tuple(s.shape for s in self.space)
             raise NotImplementedError
 
     def get_num_elements_per_sample(self):
@@ -162,8 +183,7 @@ class Dataset():
         except AttributeError:
             if self.space is not None:
                 return len(self.space) if isinstance(self.space, tuple) else 1
-            else:
-                raise NotImplementedError
+            raise NotImplementedError
 
     def get_data_pairs(self, part='train', n=None):
         """
@@ -250,7 +270,7 @@ class Dataset():
                     self.generator = dataset.generator(part)
                     self.length = dataset.get_len(part)
                     self.reshape = reshape or (
-                        (None,) * self.dataset.get_num_elements_per_sample())
+                        (None,) * dataset.get_num_elements_per_sample())
 
                 def __len__(self):
                     return self.length
@@ -417,6 +437,9 @@ class Dataset():
     def get_samples(self, key, part='train', out=None):
         """Get samples by slice or range.
 
+        The default implementation calls :meth:`get_sample` if the dataset
+        implements it.
+
         Parameters
         ----------
         key : slice or range
@@ -445,6 +468,35 @@ class Dataset():
             The samples are stacked in the first
             (additional) dimension of each array.
         """
+        if self.supports_random_access():
+            if isinstance(key, slice):
+                key = range(*key.indices(self.get_len(part)))
+            if self.get_num_elements_per_sample() == 1:
+                if out is None:
+                    out = True
+                if isinstance(out, bool):
+                    samples = np.empty((len(key),) + self.space.shape,
+                                       dtype=self.space.dtype) if out else None
+                else:
+                    samples = out
+                if samples is not None:
+                    for i, index in enumerate(key):
+                        self.get_sample(index, part=part, out=samples[i])
+            else:
+                if out is None:
+                    out = (True,) * self.get_num_elements_per_sample()
+                samples = ()
+                for out_val, space in zip(out, self.space):
+                    if isinstance(out_val, bool):
+                        s = np.empty((len(key),) + space.shape,
+                                     dtype=space.dtype) if out_val else None
+                    else:
+                        s = out_val
+                    samples = samples + (s,)
+                for i, index in enumerate(key):
+                    self.get_sample(index, part=part, out=tuple((
+                        s[i] if s is not None else None for s in samples)))
+            return samples
         raise NotImplementedError
 
     def supports_random_access(self):
@@ -466,7 +518,6 @@ class Dataset():
         except AttributeError:
             try:
                 self.get_sample(0)
-                self.get_samples(slice(1))
             except NotImplementedError:
                 return False
             return True
