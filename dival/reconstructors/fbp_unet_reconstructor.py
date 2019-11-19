@@ -302,7 +302,7 @@ class FBPUNetReconstructor(LearnedReconstructor):
                                         (1,) + self.fbp_dataset.shape[1]))
         
         ttype = torch.cuda.FloatTensor if self.use_cuda else torch.FloatTensor
-        self.net = get_skip_model(scales=self.scales).type(tensor_type)
+        self.net = get_skip_model(scales=self.scales).type(ttype)
         self.net = nn.DataParallel(self.net)
 
         criterion = torch.nn.MSELoss()
@@ -401,10 +401,9 @@ class FBPUNetReconstructor(LearnedReconstructor):
     def _reconstruct(self, observation):
         self.net.eval()
         fbp = self.fbp_op(observation)
-        tensor_type = (torch.cuda.FloatTensor if self.use_cuda else
-                       torch.FloatTensor)
+        ttype = torch.cuda.FloatTensor if self.use_cuda else torch.FloatTensor
         fbp_tensor = (torch.from_numpy(np.asarray(fbp)[None, None])
-                      .type(tensor_type))
+                      .type(ttype))
         reco_tensor = self.net(fbp_tensor)
         reconstruction = reco_tensor.cpu().detach().numpy()[0, 0]
         return self.reco_space.element(reconstruction)
