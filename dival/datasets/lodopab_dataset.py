@@ -104,7 +104,7 @@ class LoDoPaBDataset(Dataset):
         ``2``
     """
     def __init__(self, min_pt=None, max_pt=None, observation_model='post-log',
-                 min_photon_count=None):
+                 min_photon_count=None, impl='astra_cuda'):
         """
         Parameters
         ----------
@@ -134,6 +134,10 @@ class LoDoPaBDataset(Dataset):
             If ``observation_model == 'post-log'``, a value greater than zero
             is required in order to avoid undefined values. The default is 0.1,
             both for ``'post-log'`` and ``'pre-log'`` model.
+        impl : {``'skimage'``, ``'astra_cpu'``, ``'astra_cuda'``},\
+                optional
+            Implementation passed to :class:`odl.tomo.RayTransform` to
+            construct :attr:`ray_trafo`.
         """
         global DATA_PATH
         NUM_ANGLES = 1000
@@ -186,6 +190,7 @@ class LoDoPaBDataset(Dataset):
                                self.geometry.partition.max_pt,
                                self.shape[0], dtype=np.float32)
         super().__init__(space=(range_, domain))
+        self.ray_trafo = self.get_ray_trafo(impl=impl)
 
     def check_for_lodopab(self):
         """Fast check whether first and last file of each dataset part exist
@@ -291,11 +296,6 @@ class LoDoPaBDataset(Dataset):
         """
         return odl.tomo.RayTransform(self.space[1], self.geometry,
                                      range=self.space[0], impl=impl)
-
-    ray_trafo = property(get_ray_trafo)
-    """
-    Read-only property calling :meth:`get_ray_trafo` with default parameters.
-    """
 
     def get_sample(self, index, part='train', out=None):
         """
