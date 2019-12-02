@@ -7,7 +7,8 @@ from dival.reconstructors.odl_reconstructors import (FBPReconstructor,
                                                      CGReconstructor,
                                                      GaussNewtonReconstructor,
                                                      LandweberReconstructor,
-                                                     MLEMReconstructor)
+                                                     MLEMReconstructor,
+                                                     ISTAReconstructor)
 
 np.random.seed(0)
 
@@ -28,6 +29,7 @@ test_data = DataPairs(observation, ground_truth, name='shepp-logan + pois')
 # %% task table and reconstructors
 eval_tt = TaskTable()
 
+
 fbp_reconstructor = FBPReconstructor(ray_trafo, hyper_params={
     'filter_type': 'Hann',
     'frequency_scaling': 0.8})
@@ -35,9 +37,12 @@ cg_reconstructor = CGReconstructor(ray_trafo, reco_space.zero(), 4)
 gn_reconstructor = GaussNewtonReconstructor(ray_trafo, reco_space.zero(), 2)
 lw_reconstructor = LandweberReconstructor(ray_trafo, reco_space.zero(), 8)
 mlem_reconstructor = MLEMReconstructor(ray_trafo, 0.5*reco_space.one(), 1)
+ista_reconstructor = ISTAReconstructor(ray_trafo,reco_space.zero(), 10)
 
 reconstructors = [fbp_reconstructor, cg_reconstructor, gn_reconstructor,
-                  lw_reconstructor, mlem_reconstructor]
+                  lw_reconstructor, mlem_reconstructor, ista_reconstructor]
+
+
 options = {'save_iterates': True}
 
 eval_tt.append_all_combinations(reconstructors=reconstructors,

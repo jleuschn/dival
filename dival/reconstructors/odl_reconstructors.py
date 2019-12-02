@@ -3,7 +3,9 @@
 from odl.tomo import fbp_op
 from odl.operator import Operator
 from odl.space.pspace import ProductSpace
+from odl.solvers import L1Norm, L2NormSquared
 from odl.solvers.iterative import iterative, statistical
+from odl.solvers.nonsmooth import proximal_gradient_solvers
 from dival import Reconstructor, IterativeReconstructor
 
 
@@ -32,7 +34,7 @@ class FBPReconstructor(Reconstructor):
     def __init__(self, ray_trafo, padding=True, hyper_params=None,
                  pre_processor=None, post_processor=None,
                  recompute_fbp_op=True, **kwargs):
-        """
+        """ 
         Parameters
         ----------
         ray_trafo : `odl.tomo.operators.RayTransform`
@@ -391,3 +393,99 @@ class MLEMReconstructor(IterativeReconstructor):
                            noise=self.noise, callback=self.callback,
                            sensitivities=self.sensitivities)
         return out
+
+
+class ISTAReconstructor(IterativeReconstructor):
+    """Iterative reconstructor applying proximal gradient
+    algorithm for convex optimization, also known as 
+    "Iterative Soft-Thresholding Algorithm" (ISTA)
+
+
+    Attributes
+    ----------
+    op : `odl.operator.Operator` or sequence of `odl.operator.Operator`
+        The forward operator(s) of the inverse problem.
+        If an operator sequence is given, Ordered Subsets MLEM is applied.
+    x0 : ``op.domain`` element
+        Initial value.
+    niter : int
+        Number of iterations.
+    gamma: positive float
+        Step size parameter.
+    reg: `odl.operator.Operator` or sequence of `odl.operator.Operator`
+        The regularization operator(s) of the inverse problem. Needs to be
+        differentiable.
+    accelerated: boolean
+        Indicates which algorithm to use. If false, then the "Iterative 
+        Soft-Thresholding Algorithm" (ISTA) is used. If true, then the
+        accelerated version FISTA is used.
+    lam: float
+        Overrelaxation step size.
+    (starting at zero) and return the corresponding step size.
+    callback : :class:`odl.solvers.util.callback.Callback`, optional
+        Object that is called in each iteration.
+    """
+    
+    def __init__(self, op, x0, niter, gamma=0.001, reg=L1Norm, accelerated=True, 
+                 lam=1, callback=None, **kwargs):
+        """
+        Calls `odl.solvers.nonsmooth.proximal_gradient_solvers.proximal_gradient`.
+
+        Parameters
+        ----------
+        op : `odl.operator.Operator` or sequence of `odl.operator.Operator`
+            The forward operator(s) of the inverse problem.
+            If an operator sequence is given, Ordered Subsets MLEM is applied.
+        x0 : ``op.domain`` element
+            Initial value.
+        niter : int
+            Number of iterations.
+        gamma: positive float
+            Step size parameter.
+        reg: `odl.operator.Operator` or sequence of `odl.operator.Operator`
+            The regularization operator(s) of the inverse problem. Needs to be
+            differentiable.
+        accelerated: boolean
+            Indicates which algorithm to use. If false, then the "Iterative 
+            Soft-Thresholding Algorithm" (ISTA) is used. If true, then the
+            accelerated version FISTA is used.
+        lam: float
+            Overrelaxation step size.
+        (starting at zero) and return the corresponding step size.
+        callback : :class:`odl.solvers.util.callback.Callback`, optional
+            Object that is called in each iteration.
+        """
+        self.op = op
+        self.x0 = x0
+        self.niter = niter
+        self.gamma = gamma
+        self.reg = reg(op.domain)
+        self.accelerated = accelerated
+        self.lam = lam
+        self.callback = callback
+        super().__init__(
+            reco_space=self.op.domain, observation_space=self.op.range,
+            callback=callback, **kwargs)
+        
+    def _reconstruct(self, observation, out):
+        """
+        The Proximal_gradient and accelerated_proximal_gradient methods
+        from ODL have as input the function, which needs to be minimized 
+        (and not the forward operator itself). Therefore, we calculate the
+        discrepancy ||Ax-b||^2. Note that the name f and g of discrepancy and
+        regularizer in the documentation on ODL are switched in the
+        implementation in ODL.
+        """
+        observation = self.observation_space.element(observation)
+        out[:] = self.x0
+        l2_norm_sq_trans = L2NormSquared(self.op.range).translated(observation) 
+        discrepancy =  l2_norm_sq_trans * self.op
+        if not self.accelerated:
+            proximal_gradient_solvers.proximal_gradient(out, self.reg,
+                discrepancy, self.gamma, self.niter, self.callback, lam=self.lam)
+        else:
+            proximal_gradient_solvers.accelerated_proximal_gradient(out, 
+                self.reg, discrepancy, self.gamma, self.niter, self.callback, 
+                lam=self.lam)
+        return out
+            
