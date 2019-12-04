@@ -482,8 +482,9 @@ class ISTAReconstructor(IterativeReconstructor):
         # The proximal_gradient and accelerated_proximal_gradient methods
         # from ODL have as input the function, which needs to be minimized
         # (and not the forward operator itself). Therefore, we calculate the
-        # discrepancy ||Ax-b||_2^2. The discrepancy is passed as `g`
-        # and the regularizer as `f` to the odl solver.
+        # discrepancy ||Ax-b||_2^2. Note that the terms `f` and `g` are
+        # switched in odl compared to the usage in the FISTA paper
+        # (https://epubs.siam.org/doi/abs/10.1137/080716542).
         observation = self.observation_space.element(observation)
         out[:] = self.x0
         l2_norm_sq_trans = L2NormSquared(self.op.range).translated(observation)
