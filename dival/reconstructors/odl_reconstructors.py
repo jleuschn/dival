@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
 """Provides wrappers for reconstruction methods of odl."""
+from odl import power_method_opnorm, ScalingOperator
 from odl.tomo import fbp_op
+from odl.discr.diff_ops import Gradient
+from odl.operator.pspace_ops import BroadcastOperator
 from odl.operator import Operator
 from odl.space.pspace import ProductSpace
-from odl.solvers import L1Norm, L2NormSquared
+from odl.solvers import L1Norm, L2NormSquared, ZeroFunctional, SeparableSum,\
+    forward_backward_pd, GroupL1Norm, MoreauEnvelope
+from odl.solvers.smooth import newton
 from odl.solvers.iterative import iterative, statistical
-from odl.solvers.nonsmooth import proximal_gradient_solvers
+from odl.solvers.nonsmooth import proximal_gradient_solvers,\
+    primal_dual_hybrid_gradient, douglas_rachford, admm
 from odl.solvers.functional.functional import Functional
 from dival import Reconstructor, IterativeReconstructor
 
@@ -399,7 +405,7 @@ class MLEMReconstructor(IterativeReconstructor):
 class ISTAReconstructor(IterativeReconstructor):
     """Iterative reconstructor applying proximal gradient
     algorithm for convex optimization, also known as
-    "Iterative Soft-Thresholding Algorithm" (ISTA)
+    Iterative Soft-Thresholding Algorithm (ISTA).
 
     Attributes
     ----------
@@ -497,4 +503,319 @@ class ISTAReconstructor(IterativeReconstructor):
             proximal_gradient_solvers.accelerated_proximal_gradient(
                 out, self.reg, discrepancy, self.gamma, self.niter,
                 callback=self.callback, lam=self.lam)
+        return out
+
+
+class PDHGReconstructor(IterativeReconstructor):
+    """Primal-Dual Hybrid Gradient (PDHG) algorithm from the 2011 paper
+    https://link.springer.com/article/10.1007/s10851-010-0251-1 with TV
+    regularization.
+
+    Attributes
+    ----------
+    op : `odl.operator.Operator`
+        The forward operator of the inverse problem.
+    x0 : ``op.domain`` element
+        Initial value.
+    niter : int
+        Number of iterations.
+    lam : positive float, optional
+        TV-regularization rate (default ``0.01``).  
+    callback : :class:`odl.solvers.util.callback.Callback` or `None`
+        Object that is called in each iteration.
+    """
+
+    def __init__(self, op, x0, niter, lam=0.01, callback=None, **kwargs):
+        """
+        Calls `odl.solvers.nonsmooth.primal_dual_hybrid_gradient.pdhg`.
+
+        Parameters
+        ----------
+        op : `odl.operator.Operator`
+            The forward operator of the inverse problem.
+        x0 : ``op.domain`` element
+            Initial value.
+        niter : int
+            Number of iterations.
+        lam : positive float, optional
+            TV-regularization rate (default ``0.01``).  
+        callback : :class:`odl.solvers.util.callback.Callback` or `None`
+            Object that is called in each iteration.
+        """
+        self.op = op
+        self.x0 = x0
+        self.niter = niter
+        self.lam = lam
+        self.callback = callback
+        super().__init__(
+            reco_space=self.op.domain, observation_space=self.op.range,
+            callback=callback, **kwargs)
+
+    def _reconstruct(self, observation, out):
+        observation = self.observation_space.element(observation)
+        out[:] = self.x0
+        gradient = Gradient(self.op.domain)
+        L = BroadcastOperator(self.op, gradient)
+        f = ZeroFunctional(self.op.domain)
+        l2_norm = L2NormSquared(self.op.range).translated(observation)
+        l1_norm = self.lam * L1Norm(gradient.range)
+        g = SeparableSum(l2_norm, l1_norm)
+        tau, sigma = primal_dual_hybrid_gradient.pdhg_stepsize(L)
+        primal_dual_hybrid_gradient.pdhg(out, f, g, L, self.niter, 
+                                         tau, sigma, callback=self.callback)
+        return out
+
+
+class DouglasRachfordReconstructor(IterativeReconstructor):
+    """Douglas-Rachford primal-dual splitting algorithm from the 2012 paper
+    https://arxiv.org/abs/1212.0326 with TV regularization.
+
+    Attributes
+    ----------
+    op : `odl.operator.Operator`
+        The forward operator of the inverse problem.
+    x0 : ``op.domain`` element
+        Initial value.
+    niter : int
+        Number of iterations.
+    lam : positive float, optional
+        TV-regularization rate (default ``0.01``).  
+    callback : :class:`odl.solvers.util.callback.Callback` or `None`
+        Object that is called in each iteration.
+    """
+
+    def __init__(self, op, x0, niter, lam=0.01, callback=None, **kwargs):
+        """
+        Calls `odl.solvers.nonsmooth.douglas_rachford.douglas_rachford_pd`.
+
+        Parameters
+        ----------
+        op : `odl.operator.Operator`
+            The forward operator of the inverse problem.
+        x0 : ``op.domain`` element
+            Initial value.
+        niter : int
+            Number of iterations.
+        lam : positive float, optional
+            TV-regularization rate (default ``0.01``).  
+        callback : :class:`odl.solvers.util.callback.Callback` or `None`
+            Object that is called in each iteration.
+        """
+        self.op = op
+        self.x0 = x0
+        self.niter = niter
+        self.lam = lam
+        self.callback = callback
+        super().__init__(
+            reco_space=self.op.domain, observation_space=self.op.range,
+            callback=callback, **kwargs)
+
+    def _reconstruct(self, observation, out):
+        observation = self.observation_space.element(observation)
+        out[:] = self.x0
+        gradient = Gradient(self.op.domain)
+        L = BroadcastOperator(self.op, gradient)
+        f = ZeroFunctional(self.op.domain)
+        l2_norm = L2NormSquared(self.op.range).translated(observation)
+        l1_norm = self.lam * L1Norm(gradient.range)
+        g = [l2_norm, l1_norm]
+        tau, sigma = douglas_rachford.douglas_rachford_pd_stepsize(L)
+        douglas_rachford.douglas_rachford_pd(out, f, g, L, self.niter, tau,
+                                             sigma, callback=self.callback)
+        return out
+
+class ForwardBackwardReconstructor(IterativeReconstructor):
+    """ The forward-backward primal-dual splitting algorithm.
+
+    Attributes
+    ----------
+    op : `odl.operator.Operator`
+        The forward operator of the inverse problem.
+    x0 : ``op.domain`` element
+        Initial value.
+    niter : int
+        Number of iterations.
+    lam : positive float, optional
+        TV-regularization rate (default ``0.01``).
+    tau : positive float, optional
+        Step-size like parameter for ``f`` (default is ``0.01``).
+    callback : :class:`odl.solvers.util.callback.Callback` or `None`
+        Object that is called in each iteration.
+    """
+
+    def __init__(self, op, x0, niter, lam=0.01, tau = 0.01, callback=None, 
+                 **kwargs):
+        """
+        Calls `odl.solvers.forward_backward_pd'.
+
+        Parameters
+        ----------
+        op : `odl.operator.Operator`
+            The forward operator of the inverse problem.
+        x0 : ``op.domain`` element
+            Initial value.
+        niter : int
+            Number of iterations.
+        lam : positive float, optional
+            TV-regularization rate (default ``0.01``).
+        tau : positive float, optional
+            Step-size like parameter for ``f`` (default is ``0.01``).
+        callback : :class:`odl.solvers.util.callback.Callback` or `None`
+            Object that is called in each iteration.
+        """
+        self.op = op
+        self.x0 = x0
+        self.niter = niter
+        self.lam = lam
+        self.tau = tau
+        self.callback = callback
+        super().__init__(
+            reco_space=self.op.domain, observation_space=self.op.range,
+            callback=callback, **kwargs)
+
+    def _reconstruct(self, observation, out):
+        observation = self.observation_space.element(observation)
+        out[:] = self.x0
+        gradient = Gradient(self.op.domain)
+        L = [self.op, gradient]
+        f = ZeroFunctional(self.op.domain)
+        l2_norm = 0.5 * L2NormSquared(self.op.range).translated(observation)
+        l12_norm = self.lam * GroupL1Norm(gradient.range)
+        g = [l2_norm, l12_norm]
+        op_norm = power_method_opnorm(self.op, maxiter=20)
+        gradient_norm = power_method_opnorm(gradient, maxiter=20)
+        sigma_ray_trafo = 45.0 / op_norm ** 2
+        sigma_gradient = 45.0 / gradient_norm ** 2
+        sigma = [sigma_ray_trafo, sigma_gradient]
+        h = ZeroFunctional(self.op.domain)
+        forward_backward_pd(out, f, g, L, h, self.tau, sigma,
+                            self.niter, callback=self.callback)
+        
+        return out
+    
+    
+class ADMMReconstructor(IterativeReconstructor):
+    """ Generic linearized ADMM method for convex problems. ADMM stands for
+    'Alternating Direction Method of Multipliers'.
+
+    Attributes
+    ----------
+    op : `odl.operator.Operator`
+        The forward operator of the inverse problem.
+    x0 : ``op.domain`` element
+        Initial value.
+    niter : int
+        Number of iterations.
+    lam : positive float, optional
+        TV-regularization weight (default ``0.01``).  
+    tau : positive float, optional
+        Step-size like parameter for ``f`` (default is ``0.01``).
+    callback : :class:`odl.solvers.util.callback.Callback` or `None`
+        Object that is called in each iteration.
+    """
+
+    def __init__(self, op, x0, niter, lam=0.01, tau = 0.01, callback=None, 
+                 **kwargs):
+        """
+        Calls `odl.solvers.nonsmooth.admm.admm_linearized'.
+
+        Parameters
+        ----------
+        op : `odl.operator.Operator`
+            The forward operator of the inverse problem.
+        x0 : ``op.domain`` element
+            Initial value.
+        niter : int
+            Number of iterations.
+        lam : positive float, optional
+            TV-regularization weight (default ``0.01``).
+        tau : positive float, optional
+            Step-size like parameter for ``f`` (default is ``0.01``).
+        callback : :class:`odl.solvers.util.callback.Callback` or `None`
+            Object that is called in each iteration.
+        """
+        self.op = op
+        self.x0 = x0
+        self.niter = niter
+        self.lam = lam
+        self.tau = tau
+        self.callback = callback
+        super().__init__(
+            reco_space=self.op.domain, observation_space=self.op.range,
+            callback=callback, **kwargs)
+
+    def _reconstruct(self, observation, out):
+        observation = self.observation_space.element(observation)
+        out[:] = self.x0
+        gradient = Gradient(self.op.domain)
+        L = BroadcastOperator(self.op, gradient)
+        f = ZeroFunctional(self.op.domain)
+        l2_norm = L2NormSquared(self.op.range).translated(observation)
+        l1_norm = self.lam * L1Norm(gradient.range)
+        g = SeparableSum(l2_norm, l1_norm)
+        op_norm = 1.1 * power_method_opnorm(L, maxiter=20)
+        sigma = self.tau * op_norm ** 2
+        admm.admm_linearized(out, f, g, L, self.tau, sigma,
+                            self.niter, callback=self.callback)
+        return out
+
+class BFGSReconstructor(IterativeReconstructor):
+    """ Quasi-Newton BFGS method to minimize a differentiable function. The
+    TV regularization term is smoothed using the Moreau envelope.
+
+    Attributes
+    ----------
+    op : `odl.operator.Operator`
+        The forward operator of the inverse problem.
+    x0 : ``op.domain`` element
+        Initial value.
+    niter : int
+        Number of iterations.
+    lam : positive float, optional
+        TV-regularization weight (default ``0.01``).  
+    callback : :class:`odl.solvers.util.callback.Callback` or `None`
+        Object that is called in each iteration.
+    """
+
+    def __init__(self, op, x0, niter, lam=0.01, callback=None, **kwargs):
+        """
+        Calls `odl.solvers.smooth.newton.bfgs_method'.
+
+        Parameters
+        ----------
+        op : `odl.operator.Operator`
+            The forward operator of the inverse problem.
+        x0 : ``op.domain`` element
+            Initial value.
+        niter : int
+            Number of iterations.
+        lam : positive float, optional
+            TV-regularization weight (default ``0.01``).
+        callback : :class:`odl.solvers.util.callback.Callback` or `None`
+            Object that is called in each iteration.
+        """
+        self.op = op
+        self.x0 = x0
+        self.niter = niter
+        self.lam = lam
+        self.callback = callback
+        super().__init__(
+            reco_space=self.op.domain, observation_space=self.op.range,
+            callback=callback, **kwargs)
+
+    def _reconstruct(self, observation, out):
+        observation = self.observation_space.element(observation)
+        out[:] = self.x0
+        l2_norm = L2NormSquared(self.op.range)
+        discrepancy = l2_norm * (self.op - observation)
+        gradient = Gradient(self.op.domain)
+        l1_norm = GroupL1Norm(gradient.range)
+        smoothed_l1 = MoreauEnvelope(l1_norm, sigma=0.03)
+        regularizer = smoothed_l1 * gradient
+        f = discrepancy + self.lam * regularizer
+        opnorm = power_method_opnorm(self.op)
+        hessinv_estimate =ScalingOperator(self.op.domain, 1 / opnorm ** 2)
+        newton.bfgs_method(f, out, maxiter=self.niter, 
+                           hessinv_estimate=hessinv_estimate, 
+                           callback=self.callback)
         return out
