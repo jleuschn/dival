@@ -12,7 +12,8 @@ class EllipsesDataset(GroundTruthDataset):
 
     This dataset uses :meth:`odl.phantom.ellipsoid_phantom` to create
     the images.
-    The images are normalized to have a value range of ``[0., 1.]``.
+    The images are normalized to have a value range of ``[0., 1.]`` with a
+    background value of ``0.``.
 
     Attributes
     ----------
@@ -101,21 +102,22 @@ class EllipsesDataset(GroundTruthDataset):
         """
         seed = self.fixed_seeds.get(part)
         r = np.random.RandomState(seed)
-        n_ellipse = 50
-        ellipsoids = np.empty((n_ellipse, 6))
+        max_n_ellipse = 70
+        ellipsoids = np.empty((max_n_ellipse, 6))
         n = self.get_len(part=part)
         it = repeat(None, n) if n is not None else repeat(None)
         for _ in it:
-            v = (r.uniform(-.5, .5, (n_ellipse,)) *
-                 r.exponential(.4, (n_ellipse,)))
-            a1 = .2 * r.exponential(1., (n_ellipse,))
-            a2 = .2 * r.exponential(1., (n_ellipse,))
-            x = r.uniform(-1., 1., (n_ellipse,))
-            y = r.uniform(-1., 1., (n_ellipse,))
-            rot = r.uniform(0., 2*np.pi, (n_ellipse,))
+            v = (r.uniform(-0.4, 1.0, (max_n_ellipse,)))
+            a1 = .2 * r.exponential(1., (max_n_ellipse,))
+            a2 = .2 * r.exponential(1., (max_n_ellipse,))
+            x = r.uniform(-0.9, 0.9, (max_n_ellipse,))
+            y = r.uniform(-0.9, 0.9, (max_n_ellipse,))
+            rot = r.uniform(0., 2 * np.pi, (max_n_ellipse,))
+            n_ellipse = min(r.poisson(40), max_n_ellipse)
+            v[n_ellipse:] = 0.
             ellipsoids = np.stack((v, a1, a2, x, y, rot), axis=1)
             image = ellipsoid_phantom(self.space, ellipsoids)
-            image -= np.min(image)
+            # normalize the foreground (all non-zero pixels) to [0., 1.]
+            image[np.array(image) != 0.] -= np.min(image)
             image /= np.max(image)
-
             yield image

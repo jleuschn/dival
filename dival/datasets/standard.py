@@ -22,13 +22,11 @@ def get_standard_dataset(name, **kwargs):
 
             `EllipsesDataset` is used as ground truth dataset, a ray
             transform with parallel beam geometry using 30 angles is applied,
-            and white gaussian noise with a standard deviation of 5% (i.e.
-            ``0.05 * mean(abs(observation))``) is added. The ray transform is
-            normalized by its spectral norm.
+            and white gaussian noise with a standard deviation of 2.5% (i.e.
+            ``0.025 * mean(abs(observation))``) is added.
 
-            A normalized ray transform that corresponds to the noiseless
-            forward operator is stored in the attribute `ray_trafo` of the
-            dataset.
+            The ray transform that corresponds to the (noiseless) forward
+            operator is stored in the attribute `ray_trafo` of the dataset.
 
             In order to avoid the inverse crime, the ground truth images of
             shape (128, 128) are upscaled by bilinear interpolation to a
@@ -67,14 +65,6 @@ def get_standard_dataset(name, **kwargs):
                 impl : {``'skimage'``, ``'astra_cpu'``, ``'astra_cuda'``},\
                         optional
                     Implementation passed to :class:`odl.tomo.RayTransform`
-                normalize_ray_trafo : bool, optional
-                    Whether to normalize the forward operator by its op-norm.
-                    Default is `False`.
-                    If `True`, the observation values are divided by
-                    ``opnorm = dataset.ray_trafo.norm(estimate=True)``, so
-                    e.g. FBP requires to apply
-                    ``(opnorm * fbp_op(dataset.ray_trafo))(observation)`` in
-                    order obtain the original image value scale.
                 fixed_seeds : dict or bool, optional
                     Seeds to use for random ellipse generation, passed to
                     :class:`.EllipsesDataset`.
@@ -133,16 +123,10 @@ def get_standard_dataset(name, **kwargs):
         resize_op = _ResizeOperator()
         forward_op = ray_trafo * resize_op
 
-        normalize_ray_trafo = kwargs.pop('normalize_ray_trafo', False)
-        if normalize_ray_trafo:
-            # normalize by op-norm of reco_ray_trafo (128x128)
-            opnorm = reco_ray_trafo.norm(estimate=True)
-            forward_op = (1 / opnorm) * forward_op
-
         dataset = ellipses_dataset.create_pair_dataset(
             forward_op=forward_op, noise_type='white',
             noise_kwargs={'relative_stddev': True,
-                          'stddev': 0.05},
+                          'stddev': 0.025},
             noise_seeds={'train': 1, 'validation': 2, 'test': 3})
 
         dataset.get_ray_trafo = get_reco_ray_trafo
