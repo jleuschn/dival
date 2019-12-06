@@ -520,7 +520,7 @@ class PDHGReconstructor(IterativeReconstructor):
     niter : int
         Number of iterations.
     lam : positive float, optional
-        TV-regularization rate (default ``0.01``).  
+        TV-regularization rate (default ``0.01``).
     callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     """
@@ -538,7 +538,7 @@ class PDHGReconstructor(IterativeReconstructor):
         niter : int
             Number of iterations.
         lam : positive float, optional
-            TV-regularization rate (default ``0.01``).  
+            TV-regularization rate (default ``0.01``).
         callback : :class:`odl.solvers.util.callback.Callback` or `None`
             Object that is called in each iteration.
         """
@@ -561,7 +561,7 @@ class PDHGReconstructor(IterativeReconstructor):
         l1_norm = self.lam * L1Norm(gradient.range)
         g = SeparableSum(l2_norm, l1_norm)
         tau, sigma = primal_dual_hybrid_gradient.pdhg_stepsize(L)
-        primal_dual_hybrid_gradient.pdhg(out, f, g, L, self.niter, 
+        primal_dual_hybrid_gradient.pdhg(out, f, g, L, self.niter,
                                          tau, sigma, callback=self.callback)
         return out
 
@@ -579,7 +579,7 @@ class DouglasRachfordReconstructor(IterativeReconstructor):
     niter : int
         Number of iterations.
     lam : positive float, optional
-        TV-regularization rate (default ``0.01``).  
+        TV-regularization rate (default ``0.01``).
     callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     """
@@ -597,7 +597,7 @@ class DouglasRachfordReconstructor(IterativeReconstructor):
         niter : int
             Number of iterations.
         lam : positive float, optional
-            TV-regularization rate (default ``0.01``).  
+            TV-regularization rate (default ``0.01``).
         callback : :class:`odl.solvers.util.callback.Callback` or `None`
             Object that is called in each iteration.
         """
@@ -624,6 +624,7 @@ class DouglasRachfordReconstructor(IterativeReconstructor):
                                              sigma, callback=self.callback)
         return out
 
+
 class ForwardBackwardReconstructor(IterativeReconstructor):
     """ The forward-backward primal-dual splitting algorithm.
 
@@ -643,7 +644,7 @@ class ForwardBackwardReconstructor(IterativeReconstructor):
         Object that is called in each iteration.
     """
 
-    def __init__(self, op, x0, niter, lam=0.01, tau = 0.01, callback=None, 
+    def __init__(self, op, x0, niter, lam=0.01, tau=0.01, callback=None,
                  **kwargs):
         """
         Calls `odl.solvers.forward_backward_pd'.
@@ -690,10 +691,10 @@ class ForwardBackwardReconstructor(IterativeReconstructor):
         h = ZeroFunctional(self.op.domain)
         forward_backward_pd(out, f, g, L, h, self.tau, sigma,
                             self.niter, callback=self.callback)
-        
+
         return out
-    
-    
+
+
 class ADMMReconstructor(IterativeReconstructor):
     """ Generic linearized ADMM method for convex problems. ADMM stands for
     'Alternating Direction Method of Multipliers'.
@@ -707,14 +708,14 @@ class ADMMReconstructor(IterativeReconstructor):
     niter : int
         Number of iterations.
     lam : positive float, optional
-        TV-regularization weight (default ``0.01``).  
+        TV-regularization weight (default ``0.01``).
     tau : positive float, optional
         Step-size like parameter for ``f`` (default is ``0.01``).
     callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     """
 
-    def __init__(self, op, x0, niter, lam=0.01, tau = 0.01, callback=None, 
+    def __init__(self, op, x0, niter, lam=0.01, tau=0.01, callback=None,
                  **kwargs):
         """
         Calls `odl.solvers.nonsmooth.admm.admm_linearized'.
@@ -756,8 +757,9 @@ class ADMMReconstructor(IterativeReconstructor):
         op_norm = 1.1 * power_method_opnorm(L, maxiter=20)
         sigma = self.tau * op_norm ** 2
         admm.admm_linearized(out, f, g, L, self.tau, sigma,
-                            self.niter, callback=self.callback)
+                             self.niter, callback=self.callback)
         return out
+
 
 class BFGSReconstructor(IterativeReconstructor):
     """ Quasi-Newton BFGS method to minimize a differentiable function. The
@@ -772,7 +774,7 @@ class BFGSReconstructor(IterativeReconstructor):
     niter : int
         Number of iterations.
     lam : positive float, optional
-        TV-regularization weight (default ``0.01``).  
+        TV-regularization weight (default ``0.01``).
     callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     """
@@ -814,8 +816,8 @@ class BFGSReconstructor(IterativeReconstructor):
         regularizer = smoothed_l1 * gradient
         f = discrepancy + self.lam * regularizer
         opnorm = power_method_opnorm(self.op)
-        hessinv_estimate =ScalingOperator(self.op.domain, 1 / opnorm ** 2)
-        newton.bfgs_method(f, out, maxiter=self.niter, 
-                           hessinv_estimate=hessinv_estimate, 
+        hessinv_estimate = ScalingOperator(self.op.domain, 1 / opnorm ** 2)
+        newton.bfgs_method(f, out, maxiter=self.niter,
+                           hessinv_estimate=hessinv_estimate,
                            callback=self.callback)
         return out
