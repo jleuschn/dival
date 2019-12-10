@@ -8,7 +8,12 @@ from dival.reconstructors.odl_reconstructors import (FBPReconstructor,
                                                      GaussNewtonReconstructor,
                                                      LandweberReconstructor,
                                                      MLEMReconstructor,
-                                                     ISTAReconstructor)
+                                                     ISTAReconstructor,
+                                                     PDHGReconstructor,
+                                                     DouglasRachfordReconstructor,
+                                                     ForwardBackwardReconstructor,
+                                                     ADMMReconstructor, 
+                                                     BFGSReconstructor)
 
 np.random.seed(0)
 
@@ -38,10 +43,19 @@ gn_reconstructor = GaussNewtonReconstructor(ray_trafo, reco_space.zero(), 2)
 lw_reconstructor = LandweberReconstructor(ray_trafo, reco_space.zero(), 8)
 mlem_reconstructor = MLEMReconstructor(ray_trafo, 0.5*reco_space.one(), 1)
 ista_reconstructor = ISTAReconstructor(ray_trafo,reco_space.zero(), 10)
+pdhg_reconstructor = PDHGReconstructor(ray_trafo, reco_space.zero(), 10)
+dougrach_reconstructor = DouglasRachfordReconstructor(ray_trafo, 
+                                                      reco_space.zero(), 10)
+forwardbackward_reconstructor = ForwardBackwardReconstructor(ray_trafo, 
+                                                      reco_space.zero(), 10)
+admm_reconstructor = ADMMReconstructor(ray_trafo, reco_space.zero(), 10)
+bfgs_reconstructor = BFGSReconstructor(ray_trafo, reco_space.zero(), 10)
 
 reconstructors = [fbp_reconstructor, cg_reconstructor, gn_reconstructor,
-                  lw_reconstructor, mlem_reconstructor, ista_reconstructor]
-
+                  lw_reconstructor, mlem_reconstructor, ista_reconstructor,
+                  pdhg_reconstructor, dougrach_reconstructor, 
+                  forwardbackward_reconstructor, admm_reconstructor, 
+                  bfgs_reconstructor]
 
 options = {'save_iterates': True}
 
