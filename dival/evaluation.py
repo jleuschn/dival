@@ -52,6 +52,7 @@ class TaskTable:
 
             If ``False``, no iterates (intermediate reconstructions) will be
             saved, even if ``task['options']['save_iterates']==True``.
+
         show_progress : str, optional
             Whether and how to show progress. Options are:
 
@@ -87,6 +88,8 @@ class TaskTable:
                             for measure in task['measures']]
                 options = task['options']
                 skip_training = options.get('skip_training', False)
+                save_best_reconstructor = options.get(
+                    'save_best_reconstructor')
                 save_iterates = (save_reconstructions and
                                  options.get('save_iterates'))
 
@@ -120,6 +123,15 @@ class TaskTable:
                         hp_choice_list = hp_choices
                         for hp_choice in hp_choice_list:
                             _warn_if_invalid_keys(hp_choice.keys())
+                    if save_best_reconstructor:
+                        if len(measures) == 0 and len(hp_choice_list) > 1:
+                            warn("No measures are chosen to be evaluated, so "
+                                 "no best reconstructor can be selected. Will "
+                                 "not save like requested by "
+                                 "'save_best_reconstructor' option.")
+                            save_best_reconstructor = None
+                        else:
+                            best_loss = np.inf
                     for j, hp_choice in enumerate(
                             tqdm(hp_choice_list, desc='sub-task',
                                  file=orig_stdout,
@@ -150,6 +162,21 @@ class TaskTable:
                         row['task_ind'] = i
                         row['sub_task_ind'] = j
                         row_list.append(row)
+                        if save_best_reconstructor:
+                            measure = save_best_reconstructor.get(
+                                'measure', measures[0])
+                            if isinstance(measure, str):
+                                measure = Measure.get_by_short_name(measure)
+                            loss_sign = (
+                                1 if measure.measure_type == 'distance'
+                                else -1)
+                            cur_loss = (
+                                loss_sign * np.mean(
+                                    row['measure_values'][measure.short_name]))
+                            if cur_loss < best_loss:
+                                reconstructor.save_params(
+                                    save_best_reconstructor['path'])
+                                best_loss = cur_loss
                     reconstructor.hyper_params = orig_hyper_params.copy()
                 else:
                     # run task (with hyper params as they are)
@@ -169,6 +196,9 @@ class TaskTable:
                     row['task_ind'] = i
                     row['sub_task_ind'] = 0
                     row_list.append(row)
+                    if save_best_reconstructor:
+                        reconstructor.save_params(
+                            save_best_reconstructor['path'])
 
         self.results = ResultTable(row_list)
         return self.results
@@ -259,10 +289,10 @@ class TaskTable:
             The reconstructor.
         test_data : :class:`.DataPairs`
             The test data.
-        measures : sequence of (:class:`.Measure` or str)
+        measures : sequence of (:class:`.Measure` or str), optional
             Measures that will be applied. Either :class:`.Measure` objects or
             their short names can be passed.
-        dataset : :class:`.Dataset`
+        dataset : :class:`.Dataset`, optional
             The dataset that will be passed to
             :meth:`reconstructor.train <LearnedReconstructor.train>` if it is a
             :class:`.LearnedReconstructor`.
@@ -284,10 +314,33 @@ class TaskTable:
             ``'skip_training'`` : bool, optional
                 Whether to skip training. Can be used for manual training
                 of reconstructors (or loading of a stored state).
-                The default is ``False``.
+                Default: ``False``.
+            ``'save_best_reconstructor'`` : dict, optional
+                If specified, save the best reconstructor from the sub-tasks
+                (cf. `hyper_param_choices`) by calling
+                :meth:`Reconstructor.save_params`.
+                For ``hyper_param_choices=None``, the reconstructor from the
+                single sub-task is saved.
+                This option requires `measures` to be non-empty if there are
+                multiple sub-tasks.
+                The fields are:
+
+                    ``'path'`` : str
+                        The path to save the best reconstructor at (argument to
+                        :meth:`save_params`). Note that this path is used
+                        during execution of the task to store the best
+                        reconstructor params so far, so the file(s) are
+                        most likely updated multiple times.
+                    ``'measure'`` : :class:`.Measure` or str, optional
+                        The measure used to define the "best" reconstructor (in
+                        terms of mean performance).
+                        Must be one of the `measures`. By default
+                        ``measures[0]`` is used.
+                        This field is ignored if there is only one sub-task.
+
             ``'save_iterates'`` : bool, optional
                 Whether to save the intermediate reconstructions of iterative
-                reconstructors (the default is ``False``).
+                reconstructors. Default: ``False``.
                 Will be ignored if ``save_reconstructions=False`` is passed to
                 `run`. Requires the reconstructor to call its `callback`
                 attribute after each iteration.
