@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """Provides the abstract reconstructor base class."""
+import os
 from inspect import signature, Parameter
+import json
+from warnings import warn
 
 
 class Reconstructor:
@@ -172,6 +175,120 @@ class Reconstructor:
                                   "implement either 'reconstruct' or "
                                   "'_reconstruct'.".format(type(self)))
 
+    def save_hyper_params(self, path):
+        """Save hyper parameters to JSON file.
+        See also :meth:`load_hyper_params`.
+
+        Parameters
+        ----------
+        path : str
+            Path of the file in which the hyper parameters should be saved.
+            The ending ``'.json'`` is automatically appended if not included.
+        """
+        path = os.path.splitext(path)[0] + '.json'
+        with open(path, 'w') as f:
+            json.dump(self.hyper_params, f, indent=1)
+
+    def load_hyper_params(self, path):
+        """Load hyper parameters from JSON file.
+        See also :meth:`save_hyper_params`.
+
+        Parameters
+        ----------
+        path : str
+            Path of the file in which the hyper parameters are stored.
+            The ending ``'.json'`` is automatically appended if not included.
+        """
+        path = os.path.splitext(path)[0] + '.json'
+        with open(path, 'r') as f:
+            hyper_params = json.load(f)
+            for k, v in hyper_params.items():
+                if k not in self.HYPER_PARAMS:
+                    warn("loading value for unknown hyper parameter '{}'"
+                         .format(k))
+            self.hyper_params.update(hyper_params)
+
+    def save_params(self, path=None, hyper_params_path=None):
+        """Save all parameters to file.
+        E.g. for learned reconstructors, both hyper parameters and learned
+        parameters should be included.
+        The purpose of this method, together with :meth:`load_params`, is to
+        define a unified way of saving and loading any kind of reconstructor.
+        The default implementation calls :meth:`save_hyper_params`.
+        Subclasses must reimplement this method in order to include non-hyper
+        parameters.
+
+        Parameters
+        ----------
+        path : str[, optional]
+            Path at which all non-hyper parameters should be saved.
+            This argument is required if the reconstructor has non-hyper
+            parameters.
+            Implementations should either use it as a file path or as a
+            directory path for multiple files (the dir should be created by
+            this method if it does not exist).
+        hyper_params_path : str, optional
+            Path of the file in which the hyper parameters should be saved.
+            The ending ``'.json'`` is automatically appended if not included.
+            If not specified, it should be determined from `path`.
+            The default implementation saves to the file
+            ``path + '_hyper_params.json'``.
+        """
+        hp_path = hyper_params_path
+        if hp_path is None:
+            if path is None:
+                raise ValueError(
+                    'either a directory `path` or a filename '
+                    '`hyper_params_path` required (in default implementation '
+                    'of `Reconstructor.save_params`)')
+            hp_path = path + '_hyper_params.json'
+        else:
+            hp_path = (hyper_params_path if hyper_params_path.endswith('.json')
+                       else hyper_params_path + '.json')
+        self.save_hyper_params(hp_path)
+
+    def load_params(self, path=None, hyper_params_path=None):
+        """Load of parameters from file.
+        E.g. for learned reconstructors, both hyper parameters and learned
+        parameters should be included.
+        The purpose of this method, together with :meth:`save_params`, is to
+        define a unified way of saving and loading any kind of reconstructor.
+        The default implementation calls :meth:`load_hyper_params`.
+        Subclasses must reimplement this method in order to include non-hyper
+        parameters.
+
+        Parameters
+        ----------
+        path : str[, optional]
+            Path at which the parameters are stored.
+            This argument is required if the reconstructor has non-hyper
+            parameters.
+            Depending on the implementation, this may be a file path or a
+            directory path for multiple files.
+        hyper_params_path : str, optional
+            Path of the file in which the hyper parameters are stored.
+            The ending ``'.json'`` is automatically appended if not included.
+            If not specified, it should be determined from `path`. If `path`
+            is interpreted as a directory, the default for `hyper_params_path`
+            should be some file in this directory; otherwise, if `path` is used
+            as a single file name, the default for `hyper_params_path` should
+            be a file in the same directory as this file.
+            The default implementation reads from the file
+            ``path + '_hyper_params.json'``.
+        """
+        hp_path = hyper_params_path
+        if hp_path is None:
+            if path is None:
+                raise ValueError(
+                    'either a directory `path` or a filename '
+                    '`hyper_params_path` required (in default implementation '
+                    'of `Reconstructor.save_params`)')
+            hp_path = path + '_hyper_params.json'
+        else:
+            hp_path = (hyper_params_path if hyper_params_path.endswith('.json')
+                       else hyper_params_path + '.json')
+        self.load_hyper_params(hp_path)
+
 
 class LearnedReconstructor(Reconstructor):
     def train(self, dataset):
@@ -186,29 +303,82 @@ class LearnedReconstructor(Reconstructor):
         """
         raise NotImplementedError
 
-    def save_params(self, path):
-        """Save parameters to path.
-        Both hyper parameters and learned parameters should be included.
+    def save_params(self, path, hyper_params_path=None):
+        """Save all parameters to file.
+
+        Calls :meth:`save_hyper_params` and :meth:`save_learned_params`, where
+        :meth:`save_learned_params` should be implemented by the subclass.
 
         Parameters
         ----------
         path : str
-            Path at which the parameters should be saved.
-            Implementations should either use it as a file path (w/ or w/o
-            extension) or as a directory path for multiple files (the dir
-            should be created by this method if it does not exist).
+            Path at which the learned parameters should be saved.
+            Passed to :meth:`save_learned_params`.
+        hyper_params_path : str, optional
+            Path of the file in which the hyper parameters should be saved.
+            The ending ``'.json'`` is automatically appended if not included.
+            If not specified, it should be determined from `path`.
+            The default implementation saves to the file
+            ``path + '_hyper_params.json'``.
+        """
+        hp_path = hyper_params_path
+        if hp_path is None:
+            hp_path = path + '_hyper_params.json'
+        else:
+            hp_path = (hyper_params_path if hyper_params_path.endswith('.json')
+                       else hyper_params_path + '.json')
+        self.save_hyper_params(hp_path)
+        self.save_learned_params(path)
+
+    def load_params(self, path, hyper_params_path=None):
+        """Load all parameters from file.
+
+        Calls :meth:`load_hyper_params` and :meth:`load_learned_params`, where
+        :meth:`load_learned_params` should be implemented by the subclass.
+
+        Parameters
+        ----------
+        path : str
+            Path at which the parameters are stored.
+            Passed to :meth:`load_learned_params`.
+        hyper_params_path : str, optional
+            Path of the file in which the hyper parameters are stored.
+            The ending ``'.json'`` is automatically appended if not included.
+            If not specified, it should be determined from `path`.
+            The default implementation reads from the file
+            ``path + '_hyper_params.json'``.
+        """
+        hp_path = hyper_params_path
+        if hp_path is None:
+            hp_path = path + '_hyper_params.json'
+        else:
+            hp_path = (hyper_params_path if hyper_params_path.endswith('.json')
+                       else hyper_params_path + '.json')
+        self.load_hyper_params(hp_path)
+        self.load_learned_params(path)
+
+    def save_learned_params(path):
+        """Save learned parameters to file.
+
+        Parameters
+        ----------
+        path : str
+            Path at which the learned parameters should be saved.
+            Implementations may interpret this as a file path or as a directory
+            path for multiple files (which then should be created if it does
+            not exist).
         """
         raise NotImplementedError
 
-    def load_params(self, path):
-        """Load parameters from path.
-        See also :meth:`save_params`.
+    def load_learned_params(path):
+        """Load learned parameters from file.
 
         Parameters
         ----------
         path : str
-            Path at which the parameters are stored. Depending on the
-            implementation, this may be a file path or a directory path.
+            Path at which the learned parameters are stored.
+            Implementations may interpret this as a file path or as a directory
+            path for multiple files.
         """
         raise NotImplementedError
 

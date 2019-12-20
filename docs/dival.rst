@@ -20,6 +20,7 @@ Submodules
    dival.evaluation
    dival.hyper_param_search
    dival.measure
+   dival.version
 
 Module contents
 ---------------

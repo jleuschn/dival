@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 import unittest
+from io import StringIO
+from unittest.mock import patch
+import json
 import odl
 from odl.solvers.util.callback import CallbackApply, CallbackStore
 from odl.operator.default_ops import ScalingOperator
@@ -66,6 +69,33 @@ class TestReconstructor(unittest.TestCase):
         out = domain.zero()
         r3.reconstruct(observation, out)
         self.assertEqual(out, observation)
+
+    def test_save_hyper_params(self):
+        class DummyReconstructor(Reconstructor):
+            HYPER_PARAMS = {'hp1': {'default': 1.},
+                            'hp2': {'default': 2.}}
+        r = DummyReconstructor()
+
+        class ExtStringIO(StringIO):
+            def __init__(self, ext, *args, **kwargs):
+                self.ext = ext
+                super().__init__(*args, **kwargs)
+                self.ext['str'] = self.getvalue()
+
+            def close(self):
+                self.ext['str'] = self.getvalue()
+                super().close()
+        ext = {'str': ''}
+        with patch('dival.reconstructors.reconstructor.open',
+                   lambda *a, **kw: ExtStringIO(ext, ext['str'])):
+            r.save_hyper_params('dummyfilename')
+        self.assertDictEqual(r.hyper_params, json.loads(ext['str']))
+        r.hyper_params['hp1'] = 3.
+        ext = {'str': ''}
+        with patch('dival.reconstructors.reconstructor.open',
+                   lambda *a, **kw: ExtStringIO(ext, ext['str'])):
+            r.save_hyper_params('dummyfilename')
+        self.assertDictEqual(r.hyper_params, json.loads(ext['str']))
 
 
 class TestIterativeReconstructor(unittest.TestCase):
