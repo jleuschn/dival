@@ -242,6 +242,9 @@ class Reconstructor:
                     '`hyper_params_path` required (in default implementation '
                     'of `Reconstructor.save_params`)')
             hp_path = path + '_hyper_params.json'
+        else:
+            hp_path = (hyper_params_path if hyper_params_path.endswith('.json')
+                       else hyper_params_path + '.json')
         self.save_hyper_params(hp_path)
 
     def load_params(self, path=None, hyper_params_path=None):
@@ -282,7 +285,8 @@ class Reconstructor:
                     'of `Reconstructor.save_params`)')
             hp_path = path + '_hyper_params.json'
         else:
-            hp_path = os.path.splitext(hyper_params_path)[0] + '.json'
+            hp_path = (hyper_params_path if hyper_params_path.endswith('.json')
+                       else hyper_params_path + '.json')
         self.load_hyper_params(hp_path)
 
 
@@ -321,7 +325,8 @@ class LearnedReconstructor(Reconstructor):
         if hp_path is None:
             hp_path = path + '_hyper_params.json'
         else:
-            hp_path = os.path.splitext(hyper_params_path)[0] + '.json'
+            hp_path = (hyper_params_path if hyper_params_path.endswith('.json')
+                       else hyper_params_path + '.json')
         self.save_hyper_params(hp_path)
         self.save_learned_params(path)
 
@@ -347,7 +352,8 @@ class LearnedReconstructor(Reconstructor):
         if hp_path is None:
             hp_path = path + '_hyper_params.json'
         else:
-            hp_path = os.path.splitext(hyper_params_path)[0] + '.json'
+            hp_path = (hyper_params_path if hyper_params_path.endswith('.json')
+                       else hyper_params_path + '.json')
         self.load_hyper_params(hp_path)
         self.load_learned_params(path)
 
