@@ -647,7 +647,7 @@ class ForwardBackwardReconstructor(IterativeReconstructor):
     def __init__(self, op, x0, niter, lam=0.01, tau=0.01, callback=None,
                  **kwargs):
         """
-        Calls `odl.solvers.forward_backward_pd'.
+        Calls `odl.solvers.forward_backward_pd`.
 
         Parameters
         ----------
@@ -718,7 +718,7 @@ class ADMMReconstructor(IterativeReconstructor):
     def __init__(self, op, x0, niter, lam=0.01, tau=0.01, callback=None,
                  **kwargs):
         """
-        Calls `odl.solvers.nonsmooth.admm.admm_linearized'.
+        Calls `odl.solvers.nonsmooth.admm.admm_linearized`.
 
         Parameters
         ----------
@@ -781,7 +781,7 @@ class BFGSReconstructor(IterativeReconstructor):
 
     def __init__(self, op, x0, niter, lam=0.01, callback=None, **kwargs):
         """
-        Calls `odl.solvers.smooth.newton.bfgs_method'.
+        Calls `odl.solvers.smooth.newton.bfgs_method`.
 
         Parameters
         ----------
