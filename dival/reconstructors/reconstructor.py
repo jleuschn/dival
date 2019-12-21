@@ -357,7 +357,7 @@ class LearnedReconstructor(Reconstructor):
         self.load_hyper_params(hp_path)
         self.load_learned_params(path)
 
-    def save_learned_params(path):
+    def save_learned_params(self, path):
         """Save learned parameters to file.
 
         Parameters
@@ -370,7 +370,7 @@ class LearnedReconstructor(Reconstructor):
         """
         raise NotImplementedError
 
-    def load_learned_params(path):
+    def load_learned_params(self, path):
         """Load learned parameters from file.
 
         Parameters
