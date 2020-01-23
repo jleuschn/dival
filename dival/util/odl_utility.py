@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
 """Provides utilities related to ODL."""
+import warnings
+import copy
 from dival.util.odl_noise_random_state import (white_noise, uniform_noise,
                                                poisson_noise,
                                                salt_pepper_noise)
 from odl.discr.lp_discr import uniform_discr
 from odl.operator.operator import Operator
+from odl.solvers.util.callback import Callback
+from odl.util import signature_string
 import numpy as np
 
 
@@ -128,3 +132,148 @@ class NoiseOperator(Operator):
             out.assign(x)
         apply_noise(out, self.noise_type, noise_kwargs=self.noise_kwargs,
                     seed=self.seed, random_state=self.random_state)
+
+
+class CallbackStore(Callback):
+    """This is a modified copy of odl.solvers.util.callback.CallbackStore,
+    Copyright held by The ODL contributors, subject to the terms of the
+    Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed
+    with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+    This copy incorporates https://github.com/odlgroup/odl/pull/1539.
+
+    Callback for storing all iterates of a solver.
+    Can optionally apply a function, for example the norm or calculating the
+    residual.
+    By default, calls the ``copy()`` method on the iterates before storing.
+    """
+
+    def __init__(self, results=None, function=None, step=1):
+        """Initialize a new instance.
+        Parameters
+        ----------
+        results : list, optional
+            List in which to store the iterates.
+            Default: new list (``[]``)
+        function : callable, optional
+            Deprecated, use composition instead. See examples.
+            Function to be called on all incoming results before storage.
+            Default: copy
+        step : int, optional
+            Number of iterates between storing iterates.
+        Examples
+        --------
+        Store results as-is:
+        >>> callback = CallbackStore()
+        Provide list to store iterates in:
+        >>> results = []
+        >>> callback = CallbackStore(results=results)
+        Store the norm of the results:
+        >>> norm_function = lambda x: x.norm()
+        >>> callback = CallbackStore() * norm_function
+        """
+        self.results = [] if results is None else results
+        self.function = function
+        if function is not None:
+            warnings.warn('`function` argument is deprecated and will be '
+                          'removed in a future release. Use composition '
+                          'instead. '
+                          'See Examples in the documentation.',
+                          DeprecationWarning)
+        self.step = int(step)
+        self.iter = 0
+
+    def __call__(self, result):
+        """Append result to results list."""
+        if self.iter % self.step == 0:
+            if self.function:
+                self.results.append(self.function(result))
+            else:
+                self.results.append(copy.copy(result))
+        self.iter += 1
+
+    def reset(self):
+        """Clear the results list."""
+        self.results = []
+        self.iter = 0
+
+    def __iter__(self):
+        """Allow iteration over the results."""
+        return iter(self.results)
+
+    def __getitem__(self, index):
+        """Return ``self[index]``.
+        Get iterates by index.
+        """
+        return self.results[index]
+
+    def __len__(self):
+        """Number of results stored."""
+        return len(self.results)
+
+    def __repr__(self):
+        """Return ``repr(self)``."""
+        optargs = [('results', self.results, []),
+                   ('function', self.function, None),
+                   ('step', self.step, 1)]
+        inner_str = signature_string([], optargs)
+        return '{}({})'.format(self.__class__.__name__, inner_str)
+
+
+class CallbackStoreAfter(Callback):
+    """Callback for storing after specific numbers of iterations of a solver.
+    Calls the ``copy()`` method on the iterates before storing.
+
+    The source code of this class is based on
+    odl.solvers.util.callback.CallbackStore, Copyright held by The ODL
+    contributors, subject to the terms of the Mozilla Public License, v. 2.0.
+    If a copy of the MPL was not distributed with this file, You can obtain one
+    at https://mozilla.org/MPL/2.0/.
+    """
+
+    def __init__(self, results=None, store_after_iters=None):
+        """Initialize a new instance.
+
+        Parameters
+        ----------
+        results : list, optional
+            List in which to store the iterates.
+            Default: new list (``[]``)
+        store_after_iters : list of int, optional
+            Numbers of iterations after which the result should be stored.
+        """
+        self.results = results if results is not None else []
+        self.store_after_iters = (store_after_iters
+                                  if store_after_iters is not None else [])
+        self.iter = 0
+
+    def __call__(self, result):
+        """Append result to results list."""
+        if (self.iter + 1) in self.store_after_iters:
+            self.results.append(copy.copy(result))
+        self.iter += 1
+
+    def reset(self):
+        """Clear the results list."""
+        self.results = []
+        self.iter = 0
+
+    def __iter__(self):
+        """Allow iteration over the results."""
+        return iter(self.results)
+
+    def __getitem__(self, index):
+        """Return ``self[index]``.
+        Get iterates by index.
+        """
+        return self.results[index]
+
+    def __len__(self):
+        """Number of results stored."""
+        return len(self.results)
+
+    def __repr__(self):
+        """Return ``repr(self)``."""
+        optargs = [('results', self.results, []),
+                   ('store_after_iters', self.store_after_iters, [])]
+        inner_str = signature_string([], optargs)
+        return '{}({})'.format(self.__class__.__name__, inner_str)

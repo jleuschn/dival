@@ -4,6 +4,7 @@ import os
 from inspect import signature, Parameter
 import json
 from warnings import warn
+from copy import deepcopy
 
 
 class Reconstructor:
@@ -137,6 +138,8 @@ class Reconstructor:
         out : :attr:`reco_space` element-like, optional
             Array to which the result is written (in-place evaluation).
             If `None`, a new array is created (out-of-place evaluation).
+            If `None`, the new array is initialized with zero before calling
+            :meth:`_reconstruct`.
 
         Returns
         -------
@@ -385,15 +388,28 @@ class LearnedReconstructor(Reconstructor):
 
 class IterativeReconstructor(Reconstructor):
     """Iterative reconstructor base class.
+    It is recommended to use :class:`StandardIterativeReconstructor` as a base
+    class for iterative reconstructors if suitable, which provides some default
+    implementation.
 
-    Subclasses should call :attr:`callback` after each iteration in
-    ``self.reconstruct``.
+    Subclasses must call :attr:`callback` after each iteration in
+    ``self.reconstruct``. This is e.g. required by the :mod:`~dival.evaluation`
+    module.
 
     Attributes
     ----------
     callback : ``odl.solvers.util.callback.Callback`` or `None`
         Callback to be called after each iteration.
     """
+
+    HYPER_PARAMS = deepcopy(Reconstructor.HYPER_PARAMS)
+    HYPER_PARAMS.update({
+        'iterations': {
+            'default': 100,
+            'retrain': False
+        }
+    })
+
     def __init__(self, callback=None, **kwargs):
         """
         Parameters
@@ -418,8 +434,10 @@ class IterativeReconstructor(Reconstructor):
             Array to which the result is written (in-place evaluation).
             If `None`, a new array is created (out-of-place evaluation).
         callback : ``odl.solvers.util.callback.Callback``, optional
-            New value of :attr:`callback`. If `None`, the value of
-            :attr:`callback` is not modified.
+            Additional callback for this reconstruction that is temporarily
+            composed with :attr:`callback`, i.e. also called after each
+            iteration.
+            If `None`, just :attr:`callback` is called.
 
         Returns
         -------
@@ -427,8 +445,125 @@ class IterativeReconstructor(Reconstructor):
             The reconstruction.
         """
         if callback is not None:
-            self.callback = callback
-        return super().reconstruct(observation, out=out)
+            orig_callback = self.callback
+            self.callback = (callback if self.callback is None else
+                             self.callback & callback)
+        reconstruction = super().reconstruct(observation, out=out)
+        if callback is not None:
+            self.callback = orig_callback
+        return reconstruction
+
+
+class StandardIterativeReconstructor(IterativeReconstructor):
+    """Standard iterative reconstructor base class.
+
+    Provides a default implementation that only requires subclasses to
+    implement :meth:`_compute_iterate` and optionally :meth:`_setup`.
+
+    Attributes
+    ----------
+    x0 : :attr:`reco_space` element-like or `None`
+        Default initial value for the iterative reconstruction.
+        Can be overridden by passing a different ``x0`` to :meth:`reconstruct`.
+    callback : ``odl.solvers.util.callback.Callback`` or `None`
+        Callback that is called after each iteration.
+    """
+
+    def __init__(self, x0=None, callback=None, **kwargs):
+        """
+        Parameters
+        ----------
+        x0 : :attr:`reco_space` element-like, optional
+            Default initial value for the iterative reconstruction.
+            Can be overridden by passing a different ``x0`` to
+            :meth:`reconstruct`.
+        callback : ``odl.solvers.util.callback.Callback``, optional
+            Callback that is called after each iteration.
+        """
+        self.x0 = x0
+        super().__init__(callback=callback, **kwargs)
+
+    def _setup(self, observation):
+        """Setup before iteration process.
+        Called by the default implementation of :meth:`_reconstruct` in the
+        beginning, i.e. before computing the first iterate.
+
+        Parameters
+        ----------
+        observation : :attr:`observation_space` element-like
+            The observation data (forwarded from :meth:`reconstruct`).
+        """
+        pass
+
+    def _compute_iterate(self, observation, reco_previous, out):
+        """Compute next iterate.
+        This method implements the iteration step in the default
+        implementation of :meth:`_reconstruct`.
+
+        Parameters
+        ----------
+        observation : :attr:`observation_space` element-like
+            The observation data (forwarded from :meth:`reconstruct`).
+        reco_previous : :attr:`reco_space` element-like
+            The previous iterate value.
+        out : :attr:`reco_space` element-like
+            Array to which the iterate value is written.
+        """
+        raise NotImplementedError
+
+    def reconstruct(self, observation, out=None, x0=None, last_iter=0,
+                    callback=None):
+        """Reconstruct input data from observation data.
+
+        Same as :meth:`Reconstructor.reconstruct`, but with additional
+        options for iterative reconstructors.
+
+        Parameters
+        ----------
+        observation : :attr:`observation_space` element-like
+            The observation data.
+        out : :attr:`reco_space` element-like, optional
+            Array to which the result is written (in-place evaluation).
+            If `None`, a new array is created (out-of-place evaluation).
+        x0 : :attr:`reco_space` element-like, optional
+            Initial value for the iterative reconstruction.
+            Overrides the attribute :attr:`x0`, which can be set when calling
+            :meth:`__init__`.
+            If both :attr:`x0` and this argument are `None`, the default
+            implementation uses the value of `out` if called in-place, or zero
+            if called out-of-place.
+        last_iter : int, optional
+            If `x0` is the result of an iteration by this method,
+            this can be used to specify the number of iterations so far.
+            The number of iterations for the current call is
+            ``self.hyper_params['iterations'] - last_iter``.
+        callback : ``odl.solvers.util.callback.Callback``, optional
+            Additional callback for this reconstruction that is temporarily
+            composed with :attr:`callback`, i.e. also called after each
+            iteration.
+            If `None`, just :attr:`callback` is called.
+
+        Returns
+        -------
+        reconstruction : :attr:`reco_space` element or `out`
+            The reconstruction.
+        """
+        self._x0_override = x0
+        self._last_iter = last_iter
+        return super().reconstruct(observation, out=out, callback=callback)
+
+    def _reconstruct(self, observation, out):
+        self._setup(observation)
+        x = out
+        if self._x0_override is not None:
+            x[:] = self._x0_override  # override for specific reconstruction
+        elif self.x0 is not None:
+            x[:] = self.x0  # default init value
+        # keep value of `out` if no `x0` was specified
+        for i in range(self.hyper_params['iterations'] - self._last_iter):
+            self._compute_iterate(observation, reco_previous=x.copy(), out=x)
+            if self.callback is not None:
+                self.callback(x)
 
 
 class FunctionReconstructor(Reconstructor):
