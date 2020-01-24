@@ -4,11 +4,15 @@
 import sys
 from warnings import warn
 from itertools import product
+from math import ceil
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from odl.solvers.util.callback import Callback, CallbackStore
+from dival.util.odl_utility import CallbackStoreAfter
+from dival.util.odl_utility import CallbackStore
+# to be replaced by odl.solvers.util.callback.CallbackStore when
+# https://github.com/odlgroup/odl/pull/1539 is included in ODL release
 from dival.util.plot import plot_image, plot_images
 from dival.util.std_out_err_redirect_tqdm import std_out_err_redirect_tqdm
 from dival.measure import Measure
@@ -35,7 +39,8 @@ class TaskTable:
         self.tasks = []
         self.results = None
 
-    def run(self, save_reconstructions=True, show_progress='text'):
+    def run(self, save_reconstructions=True, reuse_iterates=True,
+            show_progress='text'):
         """Run all tasks and return the results.
 
         The returned :class:`ResultTable` object is also stored as
@@ -52,6 +57,24 @@ class TaskTable:
 
             If ``False``, no iterates (intermediate reconstructions) will be
             saved, even if ``task['options']['save_iterates']==True``.
+
+        reuse_iterates : bool, optional
+            Whether to reuse iterates from other sub-tasks if possible.
+            The default is ``True``.
+
+            If there are sub-tasks whose hyper parameter choices differ only
+            in the number of iterations of an :class:`IterativeReconstructor`,
+            only the sub-task with the maximum number of iterations is run and
+            the results for the other ones determined by storing iterates if
+            this option is ``True``.
+
+            Note 1: If enabled, the callbacks assigned to the reconstructor
+            will be run only for the above specified sub-tasks with the maximum
+            number of iterations.
+
+            Note 2: If the reconstructor is non-deterministic, this option can
+            affect the results as the same realization is used for multiple
+            sub-tasks.
 
         show_progress : str, optional
             Whether and how to show progress. Options are:
@@ -113,6 +136,12 @@ class TaskTable:
                         keys_retrain_first = sorted(
                             hp_choices.keys(),
                             key=lambda k: k not in retrain_param_keys)
+#                        if isinstance(reconstructor, IterativeReconstructor):
+                            # 'iterations' treated specially to re-use iterates
+#                            keys_retrain_first.remove('iterations')
+#                            hp_choices_iterations = hp_choices.get(
+#                                'iterations',
+#                                [orig_hyper_params['iterations']])
                         param_values = [
                             hp_choices.get(k, [orig_hyper_params[k]]) for k in
                             keys_retrain_first]
@@ -123,6 +152,28 @@ class TaskTable:
                         hp_choice_list = hp_choices
                         for hp_choice in hp_choice_list:
                             _warn_if_invalid_keys(hp_choice.keys())
+#                        if isinstance(reconstructor, IterativeReconstructor):
+#                             no special support for re-using iterates
+#                            hp_choices_iterations = []
+                    if (isinstance(reconstructor, IterativeReconstructor) and
+                            reuse_iterates):
+                        reuse_iterates_from = []
+                        for j, hp_choice_j in enumerate(hp_choice_list):
+                            iter_j = hp_choice_j.get(
+                                'iterations', orig_hyper_params['iterations'])
+                            (k_max, iter_max) = (-1, iter_j)
+                            for k, hp_choice_k in enumerate(hp_choice_list):
+                                iter_k = hp_choice_k.get(
+                                    'iterations',
+                                    orig_hyper_params['iterations'])
+                                if iter_k > iter_max:
+                                    hp_choice_j_rem = hp_choice_j.copy()
+                                    hp_choice_j_rem.pop('iterations')
+                                    hp_choice_k_rem = hp_choice_k.copy()
+                                    hp_choice_k_rem.pop('iterations')
+                                    if hp_choice_j_rem == hp_choice_k_rem:
+                                        (k_max, iter_max) = (k, iter_k)
+                            reuse_iterates_from.append(k_max)
                     if save_best_reconstructor:
                         if len(measures) == 0 and len(hp_choice_list) > 1:
                             warn("No measures are chosen to be evaluated, so "
@@ -132,6 +183,8 @@ class TaskTable:
                             save_best_reconstructor = None
                         else:
                             best_loss = np.inf
+                    row_sub_list = [None] * len(hp_choice_list)
+                    # run sub-tasks
                     for j, hp_choice in enumerate(
                             tqdm(hp_choice_list, desc='sub-task',
                                  file=orig_stdout,
@@ -148,36 +201,85 @@ class TaskTable:
                                  for k in retrain_param_keys))))
                         reconstructor.hyper_params = orig_hyper_params.copy()
                         reconstructor.hyper_params.update(hp_choice)
+#                        if (isinstance(reconstructor, IterativeReconstructor)
+#                                and hp_choices_iterations):
+#                            reconstructor.hyper_params['iterations'] = max(
+#                                hp_choices_iterations)  # only largest number
                         if train and not skip_training:
                             reconstructor.train(task['dataset'])
-                        row = self._run_task(
-                            reconstructor=reconstructor,
-                            test_data=test_data,
-                            measures=measures,
-                            hp_choice=hp_choice,
-                            options=options,
-                            save_reconstructions=save_reconstructions,
-                            save_iterates=save_iterates,
-                            )
-                        row['task_ind'] = i
-                        row['sub_task_ind'] = j
-                        row_list.append(row)
+                        run_sub_task = not (isinstance(reconstructor,
+                                                       IterativeReconstructor)
+                                            and reuse_iterates
+                                            and reuse_iterates_from[j] != -1)
+                        if run_sub_task:
+                            return_rows_iterates = None
+                            if (isinstance(reconstructor,
+                                           IterativeReconstructor) and
+                                    reuse_iterates):
+                                # determine the iteration numbers needed for
+                                # other sub-tasks
+                                return_iterates_for = [
+                                    k for k, from_k in
+                                    enumerate(reuse_iterates_from)
+                                    if from_k == j]  # sub-task indices
+                                return_rows_iterates = [
+                                    hp_choice_list[k].get(
+                                        'iterations',
+                                        orig_hyper_params['iterations'])
+                                    for k in return_iterates_for]  # iterations
+                            row = self._run_task(
+                                reconstructor=reconstructor,
+                                test_data=test_data,
+                                measures=measures,
+                                hp_choice=hp_choice,
+                                return_rows_iterates=return_rows_iterates,
+                                options=options,
+                                save_reconstructions=save_reconstructions,
+                                save_iterates=save_iterates,
+                                )
+                            if return_rows_iterates is not None:
+                                (row, rows_iterates) = row
+                                # assign rows for other sub-tasks
+                                for r_i, k in enumerate(return_iterates_for):
+                                    rows_iterates[r_i]['task_ind'] = i
+                                    rows_iterates[r_i]['sub_task_ind'] = k
+                                    row_sub_list[k] = rows_iterates[r_i]
+                            # assign row for current sub-task
+                            row['task_ind'] = i
+                            row['sub_task_ind'] = j
+                            row_sub_list[j] = row
                         if save_best_reconstructor:
-                            measure = save_best_reconstructor.get(
-                                'measure', measures[0])
-                            if isinstance(measure, str):
-                                measure = Measure.get_by_short_name(measure)
-                            loss_sign = (
-                                1 if measure.measure_type == 'distance'
-                                else -1)
-                            cur_loss = (
-                                loss_sign * np.mean(
-                                    row['measure_values'][measure.short_name]))
-                            if cur_loss < best_loss:
-                                reconstructor.save_params(
-                                    save_best_reconstructor['path'])
-                                best_loss = cur_loss
+                            def save_if_best_reconstructor(
+                                    measure_values, iterations=None):
+                                measure = save_best_reconstructor.get(
+                                    'measure', measures[0])
+                                if isinstance(measure, str):
+                                    measure = Measure.get_by_short_name(
+                                        measure)
+                                loss_sign = (
+                                    1 if measure.measure_type == 'distance'
+                                    else -1)
+                                cur_loss = (
+                                    loss_sign * np.mean(measure_values[
+                                        measure.short_name]))
+                                if cur_loss < best_loss:
+                                    if iterations is not None:
+                                        reconstructor.hyper_params[
+                                            'iterations'] = iterations
+                                    reconstructor.save_params(
+                                        save_best_reconstructor['path'])
+                                    return cur_loss
+                                return best_loss
+                            best_loss = save_if_best_reconstructor(
+                                row['measure_values'])
+                            if return_rows_iterates is not None:
+                                for row_iterates, iterations in zip(
+                                        rows_iterates, return_rows_iterates):
+                                    best_loss = save_if_best_reconstructor(
+                                        row_iterates['measure_values'],
+                                        iterations=iterations)
                     reconstructor.hyper_params = orig_hyper_params.copy()
+                    row_list += row_sub_list
                 else:
                     # run task (with hyper params as they are)
                     if (isinstance(reconstructor, LearnedReconstructor) and
@@ -189,6 +291,7 @@ class TaskTable:
                         test_data=test_data,
                         measures=measures,
                         hp_choice=None,
+                        return_rows_iterates=None,
                         options=options,
                         save_reconstructions=save_reconstructions,
                         save_iterates=save_iterates,
@@ -204,56 +307,67 @@ class TaskTable:
         return self.results
 
     def _run_task(self, reconstructor, test_data, measures, options, hp_choice,
-                  save_reconstructions, save_iterates):
+                  return_rows_iterates, save_reconstructions, save_iterates):
+        # Parameters
+        # ----------
+        # return_rows_iterates : list of int or `None`
+        #     If specified, also return rows for the specified iterates.
+        #     Must be `None` if reconstructor is no `IterativeReconstructor`.
+        #
+        # Returns
+        # -------
+        # row [, rows_iterates] : dict or (dict, list of dict)
+        #     The resulting row, and if `return_rows_iterates` is specified,
+        #     as second output a list of rows for the iterates.
         reconstructions = []
-        if (isinstance(reconstructor, IterativeReconstructor) and
-                save_iterates):
-            iterates = []
+        if isinstance(reconstructor, IterativeReconstructor):
+            if save_iterates:
+                iterates = []
             if options.get('save_iterates_measure_values'):
-                iterates_measure_values = {m.short_name: []
-                                           for m in measures}
+                iterates_measure_values = {m.short_name: [] for m in measures}
+            save_iterates_step = options.get('save_iterates_step', 1)
+            if return_rows_iterates is not None:
+                iterates_for_rows = []
 
         for observation, ground_truth in zip(test_data.observations,
                                              test_data.ground_truth):
             if isinstance(reconstructor, IterativeReconstructor):
                 callbacks = []
-                orig_callback = reconstructor.callback
-                if isinstance(orig_callback, Callback):
-                    callbacks.append(orig_callback)
-                elif orig_callback is not None:
-                    warn('original callback of reconstructor '
-                         'deactivated since it is not of type '
-                         '`odl.solvers.util.callback.Callback` (got '
-                         '`{}`)'.format(type(orig_callback)))
+                if return_rows_iterates is not None:
+                    iters_for_rows = []
+                    iterates_for_rows.append(iters_for_rows)
+                    callback_store_after = CallbackStoreAfter(
+                        iters_for_rows,
+                        store_after_iters=return_rows_iterates)
+                    callbacks.append(callback_store_after)
                 if save_iterates:
                     iters = []
                     iterates.append(iters)
-                    callback_save_iterates = CallbackStore(
-                        iters,
-                        step=options.get('save_iterates_step', 1))
-                    callbacks.append(callback_save_iterates)
+                    callback_store = CallbackStore(
+                        iters, step=save_iterates_step)
+                    callbacks.append(callback_store)
                 if options.get('save_iterates_measure_values'):
                     for measure in measures:
                         iters_mvs = []
                         iterates_measure_values[
                             measure.short_name].append(iters_mvs)
                         callback_store = CallbackStore(
-                            iters_mvs,
-                            step=options.get('save_iterates_step', 1))
+                            iters_mvs, step=save_iterates_step)
                         callbacks.append(
                             callback_store *
                             measure.as_operator_for_fixed_ground_truth(
                                 ground_truth))
+                callback = None
                 if len(callbacks) > 0:
-                    reconstructor.callback = callbacks[-1]
-                    for callback in callbacks[-2::-1]:
-                        reconstructor.callback &= callback
+                    callback = callbacks[-1]
+                    for c in callbacks[-2::-1]:
+                        callback &= c
+                reconstruction = reconstructor.reconstruct(
+                    observation, callback=callback)
+            else:
+                reconstruction = reconstructor.reconstruct(observation)
 
-            reconstructions.append(reconstructor.reconstruct(
-                observation))
-
-            if isinstance(reconstructor, IterativeReconstructor):
-                reconstructor.callback = orig_callback
+            reconstructions.append(reconstruction)
 
         measure_values = {}
         for measure in measures:
@@ -265,8 +379,7 @@ class TaskTable:
             if save_iterates:
                 misc['iterates'] = iterates
             if options.get('save_iterates_measure_values'):
-                misc['iterates_measure_values'] = (
-                    iterates_measure_values)
+                misc['iterates_measure_values'] = iterates_measure_values
         if hp_choice:
             misc['hp_choice'] = hp_choice
 
@@ -277,7 +390,42 @@ class TaskTable:
                'misc': misc}
         if save_reconstructions:
             row['reconstructions'] = reconstructions
-        return row
+        if return_rows_iterates is not None:
+            # create rows for iterates given by return_rows_iterates
+            rows_iterates = []
+            # convert iterates_for_rows[reconstructions_idx][rows_iterates_idx]
+            # to
+            # reconstructions_iterates[rows_iterates_idx][reconstructions_idx]
+            reconstructions_iterates = [
+                list(it) for it in zip(*iterates_for_rows)]
+            for iterations, recos_iterates in zip(
+                    return_rows_iterates, reconstructions_iterates):
+                measure_values_iterates = {}
+                for measure in measures:
+                    measure_values_iterates[measure.short_name] = [
+                        measure.apply(r, g) for r, g in zip(
+                            recos_iterates, test_data.ground_truth)]
+                misc_iterates = {}
+                # number of iterates to keep
+                n_iterates = ceil(iterations / save_iterates_step)
+                if save_iterates:
+                    misc_iterates['iterates'] = iterates[:n_iterates]
+                if options.get('save_iterates_measure_values'):
+                    misc_iterates['iterates_measure_values'] = {
+                        short_name: values[:n_iterates] for short_name, values
+                        in iterates_measure_values.items()}
+                if hp_choice:
+                    misc_iterates['hp_choice'] = hp_choice.copy()
+                    # specify 'iterations' hyper param, which was emulated by
+                    # using CallbackStoreAfter while running for more iters
+                    misc_iterates['hp_choice']['iterations'] = iterations
+                row_iterates = {'reconstructions': recos_iterates,
+                                'reconstructor': reconstructor,
+                                'test_data': test_data,
+                                'measure_values': measure_values_iterates,
+                                'misc': misc_iterates}
+                rows_iterates.append(row_iterates)
+        return row if return_rows_iterates is None else (row, rows_iterates)
 
     def append(self, reconstructor, test_data, measures=None, dataset=None,
                hyper_param_choices=None, options=None):
@@ -342,13 +490,14 @@ class TaskTable:
                 Whether to save the intermediate reconstructions of iterative
                 reconstructors. Default: ``False``.
                 Will be ignored if ``save_reconstructions=False`` is passed to
-                `run`. Requires the reconstructor to call its `callback`
-                attribute after each iteration.
+                `run`.
+                If ``reuse_iterates=True`` is passed to `run` and there are
+                sub-tasks for which iterates are reused, these iterates are the
+                same objects for all of those sub-tasks (i.e. no copies).
             ``'save_iterates_measure_values'`` : bool, optional
                 Whether to compute and save the measure values for each
                 intermediate reconstruction of iterative reconstructors
-                (the default is ``False``). Requires the reconstructor to call
-                its `callback` attribute after each iteration.
+                (the default is ``False``).
             ``'save_iterates_step'`` : int, optional
                 Step size for ``'save_iterates'`` and
                 ``'save_iterates_measure_values'`` (the default is 1).

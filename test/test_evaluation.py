@@ -5,10 +5,12 @@ from unittest.mock import patch
 import json
 import numpy as np
 import odl
+from odl.solvers.util.callback import CallbackStore
 from dival import get_standard_dataset
 from dival.data import DataPairs
 from dival.evaluation import TaskTable
 from dival.measure import PSNR, SSIM
+from dival.reconstructors.reconstructor import StandardIterativeReconstructor
 from dival.reconstructors.odl_reconstructors import FBPReconstructor
 
 np.random.seed(1)
@@ -68,6 +70,81 @@ class TestTaskTable(unittest.TestCase):
         self.assertIn(path + '_hyper_params.json', ext)
         self.assertDictEqual(json.loads(ext[path + '_hyper_params.json']),
                              known_best_choice)
+
+    def test_option_save_iterates(self):
+        domain = odl.uniform_discr([0, 0], [1, 1], (1, 1))
+        ground_truth = domain.one()
+        observation = domain.one()
+
+        # reconstruct 1., iterates 0., 0.5, 0.75, 0.875, ...
+
+        class DummyReconstructor(StandardIterativeReconstructor):
+            def _setup(self, observation):
+                self.setup_var = 'dummy_val'
+
+            def _compute_iterate(self, observation, reco_previous, out):
+                out[:] = 0.5 * (observation + reco_previous)
+
+        test_data = DataPairs([observation], [ground_truth])
+        tt = TaskTable()
+        r = DummyReconstructor(reco_space=domain)
+        hyper_param_choices = {'iterations': [10]}
+        options = {'save_iterates': True}
+        tt.append(r, test_data, hyper_param_choices=hyper_param_choices,
+                  options=options)
+
+        results = tt.run()
+        self.assertAlmostEqual(
+            1., results.results['misc'][0, 0]['iterates'][0][2][0, 0],
+            delta=0.2)
+        self.assertNotAlmostEqual(
+            1., results.results['misc'][0, 0]['iterates'][0][1][0, 0],
+            delta=0.2)
+
+    def test_iterations_hyper_param_choices(self):
+        # test 'iterations' in hyper_param_choices, because `run` has
+        # performance optimization for it
+        domain = odl.uniform_discr([0, 0], [1, 1], (1, 1))
+        ground_truth = domain.one()
+        observation = domain.one()
+
+        # reconstruct 1., iterates 0., 0.5, 0.75, 0.875, ...
+
+        class DummyReconstructor(StandardIterativeReconstructor):
+            def _setup(self, observation):
+                self.setup_var = 'dummy_val'
+
+            def _compute_iterate(self, observation, reco_previous, out):
+                out[:] = 0.5 * (observation + reco_previous)
+
+        test_data = DataPairs([observation], [ground_truth])
+        tt = TaskTable()
+        r = DummyReconstructor(reco_space=domain)
+        hyper_param_choices = {'iterations': [2, 3, 10]}
+        tt.append(r, test_data, hyper_param_choices=hyper_param_choices)
+
+        iters = []
+        r.callback = CallbackStore(iters)
+        results = tt.run(reuse_iterates=True)
+        self.assertAlmostEqual(
+            1., results.results['reconstructions'][0, 1][0][0, 0],
+            delta=0.2)
+        self.assertNotAlmostEqual(
+            1., results.results['reconstructions'][0, 0][0][0, 0],
+            delta=0.2)
+        self.assertEqual(len(iters), max(hyper_param_choices['iterations']))
+        print(results.results['misc'])
+
+        iters2 = []
+        r.callback = CallbackStore(iters2)
+        results2 = tt.run(reuse_iterates=False)
+        self.assertAlmostEqual(
+            1., results2.results['reconstructions'][0, 1][0][0, 0],
+            delta=0.2)
+        self.assertNotAlmostEqual(
+            1., results2.results['reconstructions'][0, 0][0][0, 0],
+            delta=0.2)
+        self.assertEqual(len(iters2), sum(hyper_param_choices['iterations']))
 
 
 if __name__ == '__main__':
