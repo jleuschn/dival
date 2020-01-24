@@ -149,6 +149,7 @@ class CallbackStore(Callback):
 
     def __init__(self, results=None, function=None, step=1):
         """Initialize a new instance.
+
         Parameters
         ----------
         results : list, optional
@@ -160,6 +161,7 @@ class CallbackStore(Callback):
             Default: copy
         step : int, optional
             Number of iterates between storing iterates.
+
         Examples
         --------
         Store results as-is:
