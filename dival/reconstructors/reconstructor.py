@@ -7,7 +7,27 @@ from warnings import warn
 from copy import deepcopy
 
 
-class Reconstructor:
+class _ReconstructorMeta(type):
+    def __init__(cls, name, bases, dct):
+        def get_fget(k):
+            def fget(self):
+                return self.hyper_params[k]
+            return fget
+
+        def get_fset(k):
+            def fset(self, v):
+                self.hyper_params[k] = v
+            return fset
+
+        for k in cls.HYPER_PARAMS.keys():
+            fget = get_fget(k)
+            fset = get_fset(k)
+            setattr(cls, '_fget_{}'.format(k), fget)
+            setattr(cls, '_fset_{}'.format(k), fset)
+            setattr(cls, k, property(fget, fset))
+
+
+class Reconstructor(metaclass=_ReconstructorMeta):
     """Abstract reconstructor base class.
 
     There are two ways of implementing a `Reconstructor` subclass:
