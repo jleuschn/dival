@@ -71,6 +71,19 @@ class TestReconstructor(unittest.TestCase):
         r3.reconstruct(observation, out)
         self.assertEqual(out, observation)
 
+    def test_hyper_params_properties(self):
+        class DummyReconstructor(Reconstructor):
+            HYPER_PARAMS = {'hp1': {'default': 1.},
+                            'hp2': {'default': 2.}}
+        r = DummyReconstructor()
+        self.assertTrue(hasattr(r, 'hp1'))
+        self.assertTrue(hasattr(r, 'hp2'))
+        self.assertEqual(r.hp1, 1.)
+        r.hp1 = 3.
+        self.assertEqual(r.hyper_params['hp1'], 3.)
+        r.hyper_params['hp2'] = 4.
+        self.assertEqual(r.hp2, 4.)
+
     def test_save_hyper_params(self):
         class DummyReconstructor(Reconstructor):
             HYPER_PARAMS = {'hp1': {'default': 1.},

@@ -7,7 +7,28 @@ from warnings import warn
 from copy import deepcopy
 
 
-class Reconstructor:
+class _ReconstructorMeta(type):
+    def __init__(cls, name, bases, dct):
+        def get_fget(k):
+            def fget(self):
+                return self.hyper_params[k]
+            return fget
+
+        def get_fset(k):
+            def fset(self, v):
+                self.hyper_params[k] = v
+            return fset
+
+        for k in cls.HYPER_PARAMS.keys():
+            if k.isidentifier():
+                fget = get_fget(k)
+                fset = get_fset(k)
+                setattr(cls, '_fget_{}'.format(k), fget)
+                setattr(cls, '_fset_{}'.format(k), fset)
+                setattr(cls, k, property(fget, fset))
+
+
+class Reconstructor(metaclass=_ReconstructorMeta):
     """Abstract reconstructor base class.
 
     There are two ways of implementing a `Reconstructor` subclass:
@@ -22,6 +43,14 @@ class Reconstructor:
             - ``_reconstruct(self, observation, out=None)`` (optional
               in-place)
 
+    The class attribute :attr:`HYPER_PARAMS` defines the hyper parameters of
+    the reconstructor class.
+    The current values for a reconstructor instance are given by the attribute
+    :attr:`hyper_params`.
+    Properties wrapping :attr:`hyper_params` are automatically created by the
+    metaclass (for hyper parameter names that are valid identifiers), such that
+    the hyper parameters can be written and read like instance attributes.
+
     Attributes
     ----------
     reco_space : :class:`odl.discr.DiscretizedSpace`, optional
@@ -35,6 +64,10 @@ class Reconstructor:
         Initialized automatically using the default values from
         :attr:`HYPER_PARAMS` (but may be overridden by `hyper_params` passed
         to :meth:`__init__`).
+        It is expected to have the same keys as :attr:`HYPER_PARAMS`.
+        The values for these keys in this dict are wrapped by properties with
+        the key as identifier (if possible), so an assignment to the property
+        changes the value in this dict and vice versa.
     """
 
     HYPER_PARAMS = {}
@@ -44,6 +77,11 @@ class Reconstructor:
     reconstructor.
     It should not be hidden by an instance attribute of the same name (i.e. by
     assigning a value to `self.HYPER_PARAMS` in an instance of a subtype).
+
+    *Note:* in order to inherit :attr:`HYPER_PARAMS` from a super class, the
+    subclass should create a deep copy of it, i.e. execute
+    ``HYPER_PARAMS = copy.deepcopy(SuperReconstructorClass.HYPER_PARAMS)`` in
+    the class body.
 
     The keys of this dict are the names of the hyper parameters, and each
     value is a dict with the following fields.
