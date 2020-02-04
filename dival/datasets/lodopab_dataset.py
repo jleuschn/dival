@@ -329,7 +329,7 @@ class LoDoPaBDataset(Dataset):
 
         Returns
         -------
-        ``(observation, ground_truth)`` or `None`
+        ``(observation, ground_truth)``
 
             observation : odl element or :class:`np.ndarray` or `None`
                 Depending on the value of ``out_observation`` (see parameter
@@ -412,7 +412,7 @@ class LoDoPaBDataset(Dataset):
 
         Returns
         -------
-        ``(observation, ground_truth)`` or `None`
+        ``(observation, ground_truth)``
 
             observation : :class:`np.ndarray` or `None`
                 Shape ``(samples, 1000, 513)``.
