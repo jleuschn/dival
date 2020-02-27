@@ -268,8 +268,9 @@ class Dataset():
             class GeneratorTorchDataset(TorchDataset):
                 def __init__(self, dataset, part, reshape=None):
                     self.part = part
-                    self.generator = dataset.generator(self.part)
-                    self.length = dataset.get_len(self.part)
+                    self.dataset = dataset
+                    self.generator = self.dataset.generator(self.part)
+                    self.length = self.dataset.get_len(self.part)
                     self.reshape = reshape or (
                         (None,) * dataset.get_num_elements_per_sample())
 
@@ -280,7 +281,7 @@ class Dataset():
                     try:
                         arrays = next(self.generator)
                     except StopIteration:
-                        self.generator = dataset.generator(self.part)
+                        self.generator = self.dataset.generator(self.part)
                         arrays = next(self.generator)
                     mult_elem = isinstance(arrays, tuple)
                     if not mult_elem:
