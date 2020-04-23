@@ -108,8 +108,8 @@ def get_standard_dataset(name, **kwargs):
         impl = kwargs.pop('impl', 'astra_cuda')
         ray_trafo = odl.tomo.RayTransform(space, geometry, impl=impl)
 
-        def get_reco_ray_trafo(impl=impl):
-            return odl.tomo.RayTransform(reco_space, reco_geometry, impl=impl)
+        def get_reco_ray_trafo(**kwargs):
+            return odl.tomo.RayTransform(reco_space, reco_geometry, **kwargs)
         reco_ray_trafo = get_reco_ray_trafo(impl=impl)
 
         class _ResizeOperator(odl.Operator):

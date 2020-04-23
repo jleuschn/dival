@@ -2,7 +2,7 @@
 """Provides `EllipsesDataset`."""
 from itertools import repeat
 import numpy as np
-from odl.discr.lp_discr import uniform_discr
+from odl import uniform_discr
 from odl.phantom import ellipsoid_phantom
 from dival.datasets.dataset import GroundTruthDataset
 

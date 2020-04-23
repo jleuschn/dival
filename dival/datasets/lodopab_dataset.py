@@ -12,7 +12,7 @@ import numpy as np
 import h5py
 from zipfile import ZipFile
 from tqdm import tqdm
-from odl.discr.lp_discr import uniform_discr
+from odl import uniform_discr
 import odl.tomo
 from dival.datasets.dataset import Dataset
 from dival.config import CONFIG, set_config
@@ -277,7 +277,8 @@ class LoDoPaBDataset(Dataset):
 
                 yield (observation, ground_truth)
 
-    def get_ray_trafo(self, impl=None):
+#TODO doc 
+    def get_ray_trafo(self, **kwargs):
         """
         Return the ray transform that is a noiseless version of the forward
         operator.
@@ -295,7 +296,7 @@ class LoDoPaBDataset(Dataset):
             362 x 362 images to the ``-log`` of their projections (sinograms).
         """
         return odl.tomo.RayTransform(self.space[1], self.geometry,
-                                     range=self.space[0], impl=impl)
+                                     range=self.space[0], **kwargs)
 
     def get_sample(self, index, part='train', out=None):
         """

@@ -5,7 +5,7 @@ import copy
 from dival.util.odl_noise_random_state import (white_noise, uniform_noise,
                                                poisson_noise,
                                                salt_pepper_noise)
-from odl.discr.lp_discr import uniform_discr
+from odl import uniform_discr
 from odl.operator.operator import Operator
 from odl.solvers.util.callback import Callback
 from odl.util import signature_string
