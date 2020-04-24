@@ -6,6 +6,9 @@ jobs:
   build:
     name: Tests
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        odl: [v0.7.0, master]
     steps:
       - uses: actions/checkout@v1
       - uses: actions/setup-python@v1
@@ -13,6 +16,8 @@ jobs:
           python-version: 3.7
       - run: sudo apt-get install libhdf5-dev
       - run: pip install Cython numpy pkgconfig
+      - name: Install ODL
+        run: pip install https://github.com/odlgroup/odl/archive/${{ matrix.odl }}.zip
       - name: Build
         run: python setup.py build
       - name: Install

@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 import unittest
+from itertools import islice
 import numpy as np
 import odl
 from dival.datasets.dataset import Dataset
+from dival.datasets.lodopab_dataset import LoDoPaBDataset
 
 
 class TestDataset(unittest.TestCase):
@@ -214,6 +216,71 @@ class TestDataset(unittest.TestCase):
 
         d2 = DummyDataset2()
         self.assertEqual(d2.supports_random_access(), True)
+
+
+class TestLoDoPaBDataset(unittest.TestCase):
+    def test_patient_ids(self):
+        if not LoDoPaBDataset.check_for_lodopab():
+            return
+        d = LoDoPaBDataset(impl='skimage')
+        if d.rel_patient_ids is not None:
+            for part in ['train', 'validation', 'test']:
+                self.assertEqual(len(d.rel_patient_ids[part]), d.get_len(part))
+                self.assertTrue(np.all(np.unique(d.rel_patient_ids[part]) ==
+                                       range(d.get_num_patients(part))))
+                self.assertTrue(np.all(np.diff(d.rel_patient_ids[part][
+                    LoDoPaBDataset.get_idx_sorted_by_patient()[part]]) >= 0))
+            d2 = LoDoPaBDataset(sorted_by_patient=True, impl='skimage')
+            REL_PATIENT_ID = 42
+            ifp = d.get_indices_for_patient(REL_PATIENT_ID, part)
+            ifp2 = d2.get_indices_for_patient(REL_PATIENT_ID, part)
+            self.assertGreater(len(ifp), 0)
+            self.assertEqual(len(ifp), len(ifp2))
+            for i, i2 in zip(ifp[:3], ifp2[:3]):
+                self.assertEqual(d.get_sample(i, part),
+                                 d2.get_sample(i2, part))
+
+    def test_get_samples(self):
+        if not LoDoPaBDataset.check_for_lodopab():
+            return
+        KEY = range(420, 423)
+        d = LoDoPaBDataset(impl='skimage')
+        for part in ['train', 'validation', 'test']:
+            samples = [d.get_sample(i, part) for i in KEY]
+            samples2 = d.get_samples(KEY, part)
+            for (s_obs, s_gt), s2_obs, s2_gt in zip(samples, samples2[0],
+                                                    samples2[1]):
+                self.assertTrue(np.all(np.asarray(s_obs) == s2_obs))
+                self.assertTrue(np.all(np.asarray(s_gt) == s2_gt))
+        if d.rel_patient_ids is not None:
+            d2 = LoDoPaBDataset(sorted_by_patient=True, impl='skimage')
+            for part in ['train', 'validation', 'test']:
+                samples = [d2.get_sample(i, part) for i in KEY]
+                samples2 = d2.get_samples(KEY, part)
+                for (s_obs, s_gt), s2_obs, s2_gt in zip(samples, samples2[0],
+                                                        samples2[1]):
+                    self.assertTrue(np.all(np.asarray(s_obs) == s2_obs))
+                    self.assertTrue(np.all(np.asarray(s_gt) == s2_gt))
+
+    def test_generator(self):
+        if not LoDoPaBDataset.check_for_lodopab():
+            return
+        NUM_SAMPLES = 3
+        d = LoDoPaBDataset(impl='skimage')
+        for part in ['train', 'validation', 'test']:
+            samples = [d.get_sample(i, part) for i in range(NUM_SAMPLES)]
+            samples2 = [s for s in islice(d.generator(part), NUM_SAMPLES)]
+            for (s_obs, s_gt), (s2_obs, s2_gt) in zip(samples, samples2):
+                self.assertTrue(np.all(np.asarray(s_obs) == s2_obs))
+                self.assertTrue(np.all(np.asarray(s_gt) == s2_gt))
+        if d.rel_patient_ids is not None:
+            d2 = LoDoPaBDataset(sorted_by_patient=True, impl='skimage')
+            for part in ['train', 'validation', 'test']:
+                samples = [d2.get_sample(i, part) for i in range(NUM_SAMPLES)]
+                samples2 = [s for s in islice(d2.generator(part), NUM_SAMPLES)]
+                for (s_obs, s_gt), (s2_obs, s2_gt) in zip(samples, samples2):
+                    self.assertTrue(np.all(np.asarray(s_obs) == s2_obs))
+                    self.assertTrue(np.all(np.asarray(s_gt) == s2_gt))
 
 
 if __name__ == '__main__':
