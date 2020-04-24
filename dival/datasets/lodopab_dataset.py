@@ -31,6 +31,18 @@ PHOTONS_PER_PIXEL = 4096
 ORIG_MIN_PHOTON_COUNT = 0.1
 MIN_PT = [-0.13, -0.13]
 MAX_PT = [0.13, 0.13]
+LEN = {
+    'train': 35820,
+    'validation': 3522,
+    'test': 3553}
+NUM_PATIENTS = {
+    'train': 632,
+    'validation': 60,
+    'test': 60}
+PATIENT_ID_OFFSETS = {
+    'train': 0,
+    'validation': NUM_PATIENTS['train'],
+    'test': NUM_PATIENTS['train'] + NUM_PATIENTS['validation']}
 
 
 def download_lodopab():
@@ -95,16 +107,24 @@ class LoDoPaBDataset(Dataset):
     train_len
         ``35820``
     validation_len
-       ``3522``
+        ``3522``
     test_len
         ``3553``
     random_access
         ``True``
     num_elements_per_sample
         ``2``
+    sorted_by_patient : bool
+        Whether the samples are sorted by patient id.
+        Default: ``False``.
+    rel_patient_ids : (dict of array) or `None`
+        Relative patient ids of the samples in the original non-sorted order
+        for each part, as returned by :meth:`LoDoPaBDataset.get_patient_ids`.
+        `None`, if the csv files are not found.
     """
     def __init__(self, min_pt=None, max_pt=None, observation_model='post-log',
-                 min_photon_count=None, impl='astra_cuda'):
+                 min_photon_count=None, sorted_by_patient=False,
+                 impl='astra_cuda'):
         """
         Parameters
         ----------
@@ -134,6 +154,13 @@ class LoDoPaBDataset(Dataset):
             If ``observation_model == 'post-log'``, a value greater than zero
             is required in order to avoid undefined values. The default is 0.1,
             both for ``'post-log'`` and ``'pre-log'`` model.
+        sorted_by_patient : bool, optional
+            Whether to sort the samples by patient id.
+            Useful to resplit the dataset.
+            See also :meth:`get_indices_for_patient`.
+            Note that the slices of each patient are ordered randomly wrt.
+            the z-location in any case.
+            Default: ``False``.
         impl : {``'skimage'``, ``'astra_cpu'``, ``'astra_cuda'``},\
                 optional
             Implementation passed to :class:`odl.tomo.RayTransform` to
@@ -162,12 +189,13 @@ class LoDoPaBDataset(Dataset):
             self.min_photon_count = 1.
             warn('`min_photon_count` changed from {} to 1.'.format(
                 min_photon_count))
-        self.train_len = 35820
-        self.validation_len = 3522
-        self.test_len = 3553
+        self.sorted_by_patient = sorted_by_patient
+        self.train_len = LEN['train']
+        self.validation_len = LEN['validation']
+        self.test_len = LEN['test']
         self.random_access = True
 
-        while not self.check_for_lodopab():
+        while not LoDoPaBDataset.check_for_lodopab():
             print('The LoDoPaB-CT dataset could not be found under the '
                   "configured path '{}'.".format(
                       CONFIG['lodopab_dataset']['data_path']))
@@ -184,6 +212,24 @@ class LoDoPaBDataset(Dataset):
                 DATA_PATH = input()
                 set_config('lodopab_dataset/data_path', DATA_PATH)
 
+        self.rel_patient_ids = None
+        try:
+            self.rel_patient_ids = LoDoPaBDataset.get_patient_ids()
+        except OSError as e:
+            if self.sorted_by_patient:
+                raise RuntimeError(
+                    'Can not load patient ids, required for sorting. '
+                    'OSError: {}'.format(e))
+            warn(
+                'Can not load patient ids (OSError: {}). '
+                'Therefore sorting is not possible, so please keep the '
+                'attribute `sorted_by_patient = False` for the LoDoPaBDataset.'
+                .format(e))
+        if self.rel_patient_ids is not None:
+            self._idx_sorted_by_patient = (
+                LoDoPaBDataset.get_idx_sorted_by_patient(
+                    self.rel_patient_ids))
+
         self.geometry = odl.tomo.parallel_beam_geometry(
             domain, num_angles=NUM_ANGLES, det_shape=(NUM_DET_PIXELS,))
         range_ = uniform_discr(self.geometry.partition.min_pt,
@@ -191,25 +237,6 @@ class LoDoPaBDataset(Dataset):
                                self.shape[0], dtype=np.float32)
         super().__init__(space=(range_, domain))
         self.ray_trafo = self.get_ray_trafo(impl=impl)
-
-    def check_for_lodopab(self):
-        """Fast check whether first and last file of each dataset part exist
-        under the configured data path.
-
-        Returns
-        -------
-        exists : bool
-            Whether LoDoPaB seems to exist.
-        """
-        for part in ['train', 'validation', 'test']:
-            first_file = os.path.join(
-                DATA_PATH, 'observation_{}_000.hdf5'.format(part))
-            last_file = os.path.join(
-                DATA_PATH, 'observation_{}_{:03d}.hdf5'.format(
-                    part, ceil(self.get_len(part) / NUM_SAMPLES_PER_FILE) - 1))
-            if not (os.path.exists(first_file) and os.path.exists(last_file)):
-                return False
-        return True
 
     def __get_observation_trafo(self, num_samples=1):
         if (self.min_photon_count is None or
@@ -259,6 +286,10 @@ class LoDoPaBDataset(Dataset):
             `ground_truth` : odl element with shape ``(362, 362)``
                 The values lie in the range ``[0., 1.]``.
         """
+        if self.sorted_by_patient:
+            # fall back to default implementation
+            yield from super().generator(part=part)
+            return
         num_files = ceil(self.get_len(part) / NUM_SAMPLES_PER_FILE)
         observation_trafo = self.__get_observation_trafo()
         for i in range(num_files):
@@ -277,7 +308,6 @@ class LoDoPaBDataset(Dataset):
 
                 yield (observation, ground_truth)
 
-#TODO doc 
     def get_ray_trafo(self, **kwargs):
         """
         Return the ray transform that is a noiseless version of the forward
@@ -355,6 +385,8 @@ class LoDoPaBDataset(Dataset):
         if out is None:
             out = (True, True)
         (out_observation, out_ground_truth) = out
+        if self.sorted_by_patient:
+            index = self._idx_sorted_by_patient[part][index]
         file_index = index // NUM_SAMPLES_PER_FILE
         index_in_file = index % NUM_SAMPLES_PER_FILE
         if isinstance(out_observation, bool):
@@ -431,6 +463,9 @@ class LoDoPaBDataset(Dataset):
                 is returned.
                 The values lie in the range ``[0., 1.]``.
         """
+        if self.sorted_by_patient:
+            # fall back to default implementation
+            return super().get_samples(key, part=part, out=out)
         len_part = self.get_len(part)
         if isinstance(key, slice):
             key_start = (0 if key.start is None else
@@ -504,3 +539,151 @@ class LoDoPaBDataset(Dataset):
                                      .format(part, i)), 'r') as file:
                     file['data'].read_direct(gt_arr, slc_f, slc_d)
         return (obs_arr, gt_arr)
+
+    def get_indices_for_patient(self, rel_patient_id, part='train'):
+        """
+        Return the indices of the samples from one patient.
+        If ``self.sorted_by_patient`` is ``True``, the indices will be
+        subsequent.
+
+        Parameters
+        ----------
+        rel_patient_id : int
+            Patient id, relative to the part.
+        part : {``'train'``, ``'validation'``, ``'test'``}, optional
+            Whether to return the number of train, validation or test patients.
+            Default is ``'train'``.
+
+        Returns
+        -------
+        indices : array
+            The indices of the samples from the patient.
+        """
+        if self.sorted_by_patient:
+            num_samples_by_patient = np.bincount(self.rel_patient_ids[part])
+            first_sample = np.sum(num_samples_by_patient[:rel_patient_id])
+            indices = np.array(range(
+                first_sample,
+                first_sample + num_samples_by_patient[rel_patient_id]))
+        else:
+            indices = np.nonzero(
+                self.rel_patient_ids[part] == rel_patient_id)[0]
+        return indices
+
+    @staticmethod
+    def check_for_lodopab():
+        """Fast check whether first and last file of each dataset part exist
+        under the configured data path.
+
+        Returns
+        -------
+        exists : bool
+            Whether LoDoPaB seems to exist.
+        """
+        for part in ['train', 'validation', 'test']:
+            first_file = os.path.join(
+                DATA_PATH, 'observation_{}_000.hdf5'.format(part))
+            last_file = os.path.join(
+                DATA_PATH, 'observation_{}_{:03d}.hdf5'.format(
+                    part, ceil(LEN[part] / NUM_SAMPLES_PER_FILE) - 1))
+            if not (os.path.exists(first_file) and os.path.exists(last_file)):
+                return False
+        return True
+
+    @staticmethod
+    def get_num_patients(part='train'):
+        """
+        Return the number of patients in a dataset part.
+
+        Parameters
+        ----------
+        part : {``'train'``, ``'validation'``, ``'test'``}, optional
+            Whether to return the number of train, validation or test patients.
+            Default is ``'train'``.
+        """
+        return NUM_PATIENTS[part]
+
+    @staticmethod
+    def _abs_to_rel_patient_id(abs_patient_id, part):
+        return abs_patient_id - PATIENT_ID_OFFSETS[part]
+
+    @staticmethod
+    def _rel_to_abs_patient_id(rel_patient_id, part):
+        return rel_patient_id + PATIENT_ID_OFFSETS[part]
+
+    @staticmethod
+    def get_patient_ids(relative=True):
+        """
+        Return the (relative) patient id for all samples of all dataset parts.
+
+        Parameters
+        ----------
+        relative : bool, optional
+            Whether to use ids relative to the dataset part.
+            The csv files store absolute indices, where
+            "train_ids < validation_ids < test_ids".
+            If ``False``, these absolute indices are returned.
+            If ``True``, the smallest absolute id of the part is subtracted,
+            giving zero-based (relative) patient ids.
+            Default: ``True``
+
+        Returns
+        -------
+        ids : dict of array
+            For each part: an array with the (relative) patient ids for all
+            samples (length: number of samples in the corresponding part).
+
+        Raises
+        ------
+        OSError
+            An `OSError` is raised if one of the csv files containing the
+            patient ids is missing in the configured data path.
+        """
+        ids = {}
+        for part in ['train', 'validation', 'test']:
+            ids[part] = np.loadtxt(
+                os.path.join(DATA_PATH,
+                             'patient_ids_rand_{}.csv'.format(part)),
+                dtype=np.int)
+            if relative:
+                ids[part] = LoDoPaBDataset._abs_to_rel_patient_id(ids[part],
+                                                                  part)
+        return ids
+
+    @staticmethod
+    def get_idx_sorted_by_patient(ids=None):
+        """
+        Return indices that allow access to each dataset part in patient id
+        order.
+        *Note:* in most cases this method should not be called directly. Rather
+        specify ``sorted_by_patient=True`` to the constructor if applicable.
+
+        Parameters
+        ----------
+        ids : dict of array-like, optional
+            Patient ids as returned by :meth:`get_patient_ids`. It is not
+            relevant to this function whether they are relative.
+
+        Returns
+        -------
+        idx : dict of array
+            Indices that allow access to each dataset part in patient id order.
+            Each array value is an index into the samples in original order
+            (as stored in the HDF5 files).
+            I.e.: By iterating the samples with index ``idx[part][i]`` for
+            ``i = 0, 1, 2, ...`` one first obtains all samples from one
+            patient, then continues with the samples of the second patient, and
+            so on.
+
+        Raises
+        ------
+        OSError
+            An `OSError` is raised if ``ids is None`` and one of the csv files
+            containing the patient ids is missing in the configured data path.
+        """
+        if ids is None:
+            ids = LoDoPaBDataset.get_patient_ids()
+        idx = {}
+        for part in ['train', 'validation', 'test']:
+            idx[part] = np.argsort(ids[part], kind='stable')
+        return idx
