@@ -325,8 +325,7 @@ class LoDoPaBDataset(Dataset):
             The ray transform that corresponds to the noiseless map from
             362 x 362 images to the ``-log`` of their projections (sinograms).
         """
-        return odl.tomo.RayTransform(self.space[1], self.geometry,
-                                     range=self.space[0], **kwargs)
+        return odl.tomo.RayTransform(self.space[1], self.geometry, **kwargs)
 
     def get_sample(self, index, part='train', out=None):
         """
