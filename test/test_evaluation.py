@@ -71,6 +71,55 @@ class TestTaskTable(unittest.TestCase):
         self.assertDictEqual(json.loads(ext[path + '_hyper_params.json']),
                              known_best_choice)
 
+    def test_option_save_best_reconstructor_reuse_iterates(self):
+        # test 'save_best_reconstructor' option together with 'iterations' in
+        # hyper_param_choices, because `run` has performance optimization for
+        # it (with the default argument ``reuse_iterates=True``)
+        domain = odl.uniform_discr([0, 0], [1, 1], (2, 2))
+        ground_truth = domain.element([[1, 0], [0, 1]])
+        observation = domain.element([[0, 0], [0, 0]])
+
+        # Reconstruct [[1, 0], [0, 1]], iterates are
+        # [[0, 0], [0, 0]], [[.1, .1], [.1, .1]], [[.2, .2], [.2, .2]], ...
+        # Best will be [[.5, .5], [.5, .5]].
+
+        class DummyReconstructor(StandardIterativeReconstructor):
+            def _setup(self, observation):
+                self.setup_var = 'dummy_val'
+
+            def _compute_iterate(self, observation, reco_previous, out):
+                out[:] = reco_previous + 0.1
+
+        test_data = DataPairs([observation], [ground_truth])
+        tt = TaskTable()
+        r = DummyReconstructor(reco_space=domain)
+        hyper_param_choices = {'iterations': list(range(10))}
+        known_best_choice = {'iterations': 5}
+        path = 'dummypath'
+        options = {'save_best_reconstructor': {'path': path,
+                                               'measure': PSNR}}
+        tt.append(r, test_data, measures=[PSNR],
+                  hyper_param_choices=hyper_param_choices,
+                  options=options)
+
+        class ExtStringIO(StringIO):
+            def __init__(self, ext, f, *args, **kwargs):
+                self.ext = ext
+                self.f = f
+                super().__init__(*args, **kwargs)
+                self.ext[self.f] = self.getvalue()
+
+            def close(self):
+                self.ext[self.f] = self.getvalue()
+                super().close()
+        ext = {}
+        with patch('dival.reconstructors.reconstructor.open',
+                   lambda f, *a, **kw: ExtStringIO(ext, f)):
+            tt.run()
+        self.assertIn(path + '_hyper_params.json', ext)
+        self.assertDictEqual(json.loads(ext[path + '_hyper_params.json']),
+                             known_best_choice)
+
     def test_option_save_iterates(self):
         domain = odl.uniform_discr([0, 0], [1, 1], (1, 1))
         ground_truth = domain.one()
