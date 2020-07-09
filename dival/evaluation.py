@@ -248,36 +248,36 @@ class TaskTable:
                             row['task_ind'] = i
                             row['sub_task_ind'] = j
                             row_sub_list[j] = row
-                        if save_best_reconstructor:
-                            def save_if_best_reconstructor(
-                                    measure_values, iterations=None):
-                                measure = save_best_reconstructor.get(
-                                    'measure', measures[0])
-                                if isinstance(measure, str):
-                                    measure = Measure.get_by_short_name(
-                                        measure)
-                                loss_sign = (
-                                    1 if measure.measure_type == 'distance'
-                                    else -1)
-                                cur_loss = (
-                                    loss_sign * np.mean(measure_values[
-                                        measure.short_name]))
-                                if cur_loss < best_loss:
-                                    if iterations is not None:
-                                        reconstructor.hyper_params[
-                                            'iterations'] = iterations
-                                    reconstructor.save_params(
-                                        save_best_reconstructor['path'])
-                                    return cur_loss
-                                return best_loss
-                            best_loss = save_if_best_reconstructor(
-                                row['measure_values'])
-                            if return_rows_iterates is not None:
-                                for row_iterates, iterations in zip(
-                                        rows_iterates, return_rows_iterates):
-                                    best_loss = save_if_best_reconstructor(
-                                        row_iterates['measure_values'],
-                                        iterations=iterations)
+                            if save_best_reconstructor:
+                                def save_if_best_reconstructor(
+                                        measure_values, iterations=None):
+                                    measure = save_best_reconstructor.get(
+                                        'measure', measures[0])
+                                    if isinstance(measure, str):
+                                        measure = Measure.get_by_short_name(
+                                            measure)
+                                    loss_sign = (
+                                        1 if measure.measure_type == 'distance'
+                                        else -1)
+                                    cur_loss = (
+                                        loss_sign * np.mean(measure_values[
+                                            measure.short_name]))
+                                    if cur_loss < best_loss:
+                                        if iterations is not None:
+                                            reconstructor.hyper_params[
+                                                'iterations'] = iterations
+                                        reconstructor.save_params(
+                                            save_best_reconstructor['path'])
+                                        return cur_loss
+                                    return best_loss
+                                best_loss = save_if_best_reconstructor(
+                                    row['measure_values'])
+                                if return_rows_iterates is not None:
+                                    for row_iterates, iterations in zip(
+                                            rows_iterates, return_rows_iterates):
+                                        best_loss = save_if_best_reconstructor(
+                                            row_iterates['measure_values'],
+                                            iterations=iterations)
                     reconstructor.hyper_params = orig_hyper_params.copy()
                     row_list += row_sub_list
                 else:
@@ -335,10 +335,18 @@ class TaskTable:
                 callbacks = []
                 if return_rows_iterates is not None:
                     iters_for_rows = []
+                    store_after_iters = return_rows_iterates.copy()
+                    if 0 in store_after_iters:
+                        warn('reporting a dummy zero reconstruction as '
+                             'zero-th iterate of `IterativeReconstructor`')
+                        # there is no general way to obtain the 0-th iterate,
+                        # the first callback call is after first iteration
+                        iters_for_rows.append(reconstructor.reco_space.zero())
+                        store_after_iters.remove(0)
                     iterates_for_rows.append(iters_for_rows)
                     callback_store_after = CallbackStoreAfter(
                         iters_for_rows,
-                        store_after_iters=return_rows_iterates)
+                        store_after_iters=store_after_iters)
                     callbacks.append(callback_store_after)
                 if save_iterates:
                     iters = []
