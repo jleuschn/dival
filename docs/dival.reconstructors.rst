@@ -1,6 +1,14 @@
 dival.reconstructors package
 ============================
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   dival.reconstructors.networks
+
 Submodules
 ----------
 
