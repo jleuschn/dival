@@ -94,7 +94,7 @@ List of standard datasets for which (some) reference reconstructor
 configurations are available.
 """
 
-DATA_URL = 'https://github.com/jleuschn/supp.dival/raw/dev/reference_params'
+DATA_URL = 'https://github.com/jleuschn/supp.dival/raw/master/reference_params'
 
 def construct_reconstructor(reconstructor_key_name_or_type, dataset_name,
                             **kwargs):
