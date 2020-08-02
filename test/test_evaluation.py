@@ -38,7 +38,8 @@ class TestTaskTable(unittest.TestCase):
             tt.results.results['measure_values'][0, 0]['psnr'][0], 15.)
 
     def test_option_save_best_reconstructor(self):
-        dataset = get_standard_dataset('ellipses', impl='skimage')
+        dataset = get_standard_dataset('ellipses', fixed_seeds=True,
+                                       impl='skimage')
         test_data = dataset.get_data_pairs('validation', 1)
         tt = TaskTable()
         fbp_reconstructor = FBPReconstructor(dataset.ray_trafo)

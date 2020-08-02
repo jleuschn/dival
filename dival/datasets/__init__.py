@@ -28,7 +28,8 @@ from warnings import warn
 
 __all__ = ['get_standard_dataset', 'Dataset', 'GroundTruthDataset',
            'ObservationGroundTruthPairDataset', 'EllipsesDataset',
-           'LoDoPaBDataset']
+           'LoDoPaBDataset', 'AngleSubsetDataset', 'CachedDataset',
+           'generate_cache_files', 'FBPDataset', 'ReorderedDataset']
 
 from .standard import get_standard_dataset
 from .dataset import (Dataset, GroundTruthDataset,
@@ -40,3 +41,7 @@ except FileNotFoundError as e:
     __all__.remove('LoDoPaBDataset')
     warn('could not import `LoDoPaBDataset` because of the following '
          'error:\n\n{}\n'.format(e))
+from .angle_subset_dataset import AngleSubsetDataset
+from .cached_dataset import CachedDataset, generate_cache_files
+from .fbp_dataset import FBPDataset
+from .reordered_dataset import ReorderedDataset

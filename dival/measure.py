@@ -8,7 +8,7 @@ is used by the :mod:`~dival.evaluation` module.
 from abc import ABC, abstractmethod
 from warnings import warn
 import numpy as np
-from skimage.measure import compare_ssim
+from skimage.metrics import structural_similarity
 from odl.operator.operator import Operator
 
 
@@ -229,7 +229,7 @@ class SSIMMeasure(Measure):
 
     def __init__(self, short_name=None, **kwargs):
         """
-        This is a wrapper for :func:`skimage.measure.compare_ssim`.
+        This is a wrapper for :func:`skimage.metrics.structural_similarity`.
         The data range is automatically determined from the ground truth if not
         given to the constructor.
 
@@ -239,7 +239,7 @@ class SSIMMeasure(Measure):
             Short name.
         kwargs : dict, optional
             Keyword arguments that will be passed to
-            :func:`~skimage.measure.compare_ssim` in :meth:`apply`.
+            :func:`~skimage.metrics.structural_similarity` in :meth:`apply`.
             If `data_range` is not specified,
             ``np.max(ground_truth) - np.min(ground_truth)`` is used.
         """
@@ -254,7 +254,7 @@ class SSIMMeasure(Measure):
         gt = np.asarray(ground_truth)
         data_range = (self.data_range if self.data_range is not None
                       else np.max(gt) - np.min(gt))
-        return compare_ssim(reconstruction, gt, data_range=data_range,
+        return structural_similarity(reconstruction, gt, data_range=data_range,
                             **self.kwargs)
 
 

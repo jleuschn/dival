@@ -16,6 +16,10 @@ CONFIG = {
  'lodopab_dataset': {
   'data_path': os.path.normpath(
       os.path.expanduser('~/.dival/datasets/lodopab'))
+ },
+ 'reference_params': {
+  'data_path': os.path.normpath(
+      os.path.expanduser('~/.dival/reference_params'))
  }
 }
 """
