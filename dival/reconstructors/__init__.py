@@ -3,9 +3,14 @@ from .reconstructor import (Reconstructor, IterativeReconstructor,
                             StandardIterativeReconstructor,
                             LearnedReconstructor,
                             FunctionReconstructor)
-from .standard_learned_reconstructor import StandardLearnedReconstructor
 
 __all__ = ['Reconstructor', 'IterativeReconstructor',
            'StandardIterativeReconstructor',
-           'LearnedReconstructor', 'StandardLearnedReconstructor',
-           'FunctionReconstructor']
+           'LearnedReconstructor', 'FunctionReconstructor']
+
+try:
+    from .standard_learned_reconstructor import StandardLearnedReconstructor
+except ImportError:
+    pass
+else:
+    __all__.append('StandardLearnedReconstructor')

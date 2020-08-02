@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
+try:
+    import torch
+except ModuleNotFoundError:
+    raise ImportError('missing PyTorch')
+
 from copy import deepcopy
 from math import ceil
 import odl
-import torch
 import numpy as np
 from tqdm import tqdm
 

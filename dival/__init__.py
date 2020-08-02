@@ -8,8 +8,7 @@ from .datasets.standard import get_standard_dataset
 from .reference_reconstructors import get_reference_reconstructor
 from .reconstructors import (
     Reconstructor, IterativeReconstructor,
-    StandardIterativeReconstructor, LearnedReconstructor,
-    StandardLearnedReconstructor)
+    StandardIterativeReconstructor, LearnedReconstructor)
 from .measure import Measure
 from .evaluation import TaskTable
 
@@ -20,6 +19,12 @@ __all__ = ['CONFIG', 'get_config', 'set_config',
            'get_reference_reconstructor',
            'Reconstructor', 'IterativeReconstructor',
            'StandardIterativeReconstructor', 'LearnedReconstructor',
-           'StandardLearnedReconstructor',
            'Measure',
            'TaskTable']
+
+try:
+    from .reconstructors import StandardLearnedReconstructor
+except ImportError:
+    pass
+else:
+    __all__.append('StandardLearnedReconstructor')

@@ -28,5 +28,8 @@ setup(name='dival',
           'requests',
           'packaging'
       ],
+      extras_require={
+          'torch_learned_reconstructors': ['torch']
+      },
       include_package_data=True,
       zip_safe=False)
