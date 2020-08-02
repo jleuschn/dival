@@ -16,7 +16,7 @@ Currently, the following datasets are included:
 * ``'ellipses'``:
     A typical synthetical CT dataset with ellipse phantoms.
 * ``'lodopab'``:
-    The public [LoDoPaP-CT dataset](https://doi.org/10.5281/zenodo.3384092),
+    The public [LoDoPaB-CT dataset](https://doi.org/10.5281/zenodo.3384092),
     based on real CT reconstructions from the public
     [LIDC-IDRI](https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI)
     dataset.
