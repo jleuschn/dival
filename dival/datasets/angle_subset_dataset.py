@@ -52,8 +52,10 @@ class AngleSubsetDataset(Dataset):
         dataset : `Dataset`
             Basis CT dataset.
             Requirements:
+
                 - sample elements are ``(observation, ground_truth)``
                 - :meth:`get_ray_trafo` gives corresponding ray transform.
+
         angle_indices : array-like or slice
             Indices of the angles to use from the observations.
         impl : {``'skimage'``, ``'astra_cpu'``, ``'astra_cuda'``},\

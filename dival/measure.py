@@ -40,15 +40,21 @@ class Measure(ABC):
         Name of the measure.
     description : str
         Description of the measure.
-    measure_dict : dict, class attribute
-        Registry of all measures with their :attr:`short_name` as key.
     """
     measure_type = None
+    """Class attribute, default value for :attr:`measure_type`."""
     short_name = ''
+    """Class attribute, default value for :attr:`short_name`."""
     name = ''
+    """Class attribute, default value for :attr:`name`."""
     description = ''
+    """Class attribute, default value for :attr:`description`."""
 
     measure_dict = {}
+    """
+    Class attribute, registry of all measures with their :attr:`short_name` as
+    key.
+    """
 
     def __init__(self, short_name=None):
         """

@@ -25,12 +25,12 @@ def tv_loss(x):
 
 def poisson_loss(y_pred, y_true, photons_per_pixel=4096, mu_max=MU_MAX):
     """
-    Loss corresponding to Poisson regression (cf. [1]_) for post-log CT data.
+    Loss corresponding to Poisson regression (cf. [2]_) for post-log CT data.
     The default parameters are based on the LoDoPaB dataset creation
-    (cf. [2]_).
+    (cf. [3]_).
 
     :Authors:
-    Sören Dittmer <sdittmer@math.uni-bremen.de>
+        Sören Dittmer <sdittmer@math.uni-bremen.de>
 
     Parameters
     ----------
@@ -48,8 +48,8 @@ def poisson_loss(y_pred, y_true, photons_per_pixel=4096, mu_max=MU_MAX):
 
     References
     ----------
-    .. [1] https://en.wikipedia.org/wiki/Poisson_regression
-    .. [2] https://github.com/jleuschn/lodopab_tech_ref/blob/master/create_dataset.py
+    .. [2] https://en.wikipedia.org/wiki/Poisson_regression
+    .. [3] https://github.com/jleuschn/lodopab_tech_ref/blob/master/create_dataset.py
     """
 
     def get_photons(y):

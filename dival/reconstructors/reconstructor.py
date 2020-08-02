@@ -264,6 +264,7 @@ class Reconstructor(metaclass=_ReconstructorMeta):
         `hyper_params_path` from `path`, such that all parameters can be saved
         and loaded by specifying only `path`.
         Recommended patterns are:
+
             - if non-hyper parameters are stored in a single file and `path`
               specifies it without file ending:
               ``hyper_params_path=path + '_hyper_params.json'``

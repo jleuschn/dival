@@ -33,10 +33,10 @@ def get_standard_dataset(name, **kwargs):
             discretization is different from the one of :attr:`ray_trafo`).
             
             Attributes of the returned dataset:
-                ray_trafo : :class:`odl.tomo.RayTransform`
+                `ray_trafo` : :class:`odl.tomo.RayTransform`
                     Ray transform corresponding to the noiseless forward
                     operator.
-                get_ray_trafo(**kwargs) : function
+                ``get_ray_trafo(**kwargs)`` : function
                     Function that returns a ray transform corresponding to the
                     noiseless forward operator. Keyword arguments (e.g. `impl`)
                     are forwarded to the :class:`RayTransform` constructor.
@@ -57,11 +57,11 @@ def get_standard_dataset(name, **kwargs):
             is applied to the projection data.
             
             Attributes of the returned dataset:
-                ray_trafo : :class:`odl.tomo.RayTransform`
+                `ray_trafo` : :class:`odl.tomo.RayTransform`
                     Ray transform corresponding to the noiseless forward
                     operator.
             Methods of the returned dataset:
-                get_ray_trafo(**kwargs)
+                ``get_ray_trafo(**kwargs)``
                     Function that returns a ray transform corresponding to the
                     noiseless forward operator. Keyword arguments (e.g. `impl`)
                     are forwarded to the :class:`RayTransform` constructor.

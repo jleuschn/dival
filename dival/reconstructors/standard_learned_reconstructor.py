@@ -35,15 +35,13 @@ class StandardLearnedReconstructor(LearnedReconstructor):
 
     Attributes
     ----------
-    op : :class:`odl.operator.Operator`
-        Forward operator, normalized if
-        ``self.hyper_params['normalize_by_opnorm']`` is ``True``.
     model : :class:`torch.nn.Module` or `None`
         The neural network.
         Must be initialized by the subclass :meth:`init_model` implementation.
     non_normed_op : :class:`odl.operator.Operator`
-        The original ``op`` passed to :meth:`__init__`, regardless of
+        The original `op` passed to :meth:`__init__`, regardless of
         ``self.hyper_params['normalize_by_opnorm']``.
+        See also :attr:`op`.
     """
 
     HYPER_PARAMS = deepcopy(LearnedReconstructor.HYPER_PARAMS)
@@ -123,6 +121,11 @@ class StandardLearnedReconstructor(LearnedReconstructor):
 
     @property
     def op(self):
+        """
+        :class:`odl.operator.Operator` :
+        The forward operator, normalized if
+        ``self.hyper_params['normalize_by_opnorm']`` is ``True``.
+        """
         if self.normalize_by_opnorm:
             return (1./self.opnorm) * self.non_normed_op
         return self.non_normed_op
@@ -306,7 +309,7 @@ class StandardLearnedReconstructor(LearnedReconstructor):
         Parameters
         ----------
         dataset_train : :class:`torch.utils.data.Dataset`
-            The training (torch) dataset constructed in :meth:`train'.
+            The training (torch) dataset constructed in :meth:`train`.
         """
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
@@ -318,7 +321,7 @@ class StandardLearnedReconstructor(LearnedReconstructor):
         Parameters
         ----------
         dataset_train : :class:`torch.utils.data.Dataset`
-            The training (torch) dataset constructed in :meth:`train'.
+            The training (torch) dataset constructed in :meth:`train`.
         """
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.optimizer, max_lr=self.lr,

@@ -63,10 +63,12 @@ specified:
 
     ``'type'`` : dict
         The reconstructor class, given by the following fields:
+
             ``'cls'`` : str
                 The class name.
             ``'module'`` : str
                 The module to import the class from.
+
     ``'datasets'`` : list of str
         List of standard dataset names the configuration is available for.
     ``'learned_params_spec'`` : dict, optional
@@ -74,6 +76,7 @@ specified:
         See also :meth:`LearnedReconstructor.save_learned_params` and
         :meth:`LearnedReconstructor.load_learned_params`.
         Valid fields are:
+
             ``'ext'`` : str, optional
                 A single file with the given extension (e.g. ``'.pt'``).
                 The param path (returned by :func:`get_params_path`) is
