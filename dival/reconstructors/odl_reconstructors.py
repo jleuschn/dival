@@ -10,10 +10,11 @@ from odl.solvers import L1Norm, L2NormSquared, ZeroFunctional, SeparableSum,\
     forward_backward_pd, GroupL1Norm, MoreauEnvelope
 from odl.solvers.smooth import newton
 from odl.solvers.iterative import iterative, statistical
+from odl.solvers.iterative.iterative import exp_zero_seq
 from odl.solvers.nonsmooth import proximal_gradient_solvers,\
     primal_dual_hybrid_gradient, douglas_rachford, admm
 from odl.solvers.functional.functional import Functional
-from dival import Reconstructor, IterativeReconstructor
+from dival.reconstructors import Reconstructor, IterativeReconstructor
 
 
 class FBPReconstructor(Reconstructor):
@@ -81,7 +82,10 @@ class FBPReconstructor(Reconstructor):
         if self.recompute_fbp_op:
             self.fbp_op = fbp_op(self.ray_trafo, padding=self.padding,
                                  **self.hyper_params)
-        self.fbp_op(observation, out=out)
+        if out in self.reco_space:
+            self.fbp_op(observation, out=out)
+        else:  # out is e.g. numpy array, cannot be passed to fbp_op
+            out[:] = self.fbp_op(observation)
         if self.post_processor is not None:
             out[:] = self.post_processor(out)
 
@@ -141,13 +145,18 @@ class CGReconstructor(IterativeReconstructor):
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
-        out[:] = self.x0
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
         if self.op_is_symmetric:
-            iterative.conjugate_gradient(self.op, out, observation,
+            iterative.conjugate_gradient(self.op, out_, observation,
                                          self.niter, self.callback)
         else:
-            iterative.conjugate_gradient_normal(self.op, out, observation,
+            iterative.conjugate_gradient_normal(self.op, out_, observation,
                                                 self.niter, self.callback)
+        if out not in self.reco_space:
+            out[:] = out_
         return out
 
 
@@ -162,12 +171,13 @@ class GaussNewtonReconstructor(IterativeReconstructor):
         Initial value.
     niter : int
         Maximum number of iterations.
-    zero_seq : iterable
-        Zero sequence used for regularization.
+    zero_seq_gen : generator
+        Zero sequence generator used for regularization.
     callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     """
-    def __init__(self, op, x0, niter, zero_seq=None, callback=None, **kwargs):
+    def __init__(self, op, x0, niter, zero_seq_gen=None, callback=None,
+                 **kwargs):
         """
         Calls `odl.solvers.iterative.iterative.gauss_newton`.
 
@@ -180,27 +190,32 @@ class GaussNewtonReconstructor(IterativeReconstructor):
             Initial value.
         niter : int
             Maximum number of iterations.
-        zero_seq : iterable, optional
-            Zero sequence used for regularization.
+        zero_seq_gen : generator, optional
+            Zero sequence generator used for regularization.
+            Default: generator yielding 2^(-i).
         callback : :class:`odl.solvers.util.callback.Callback`, optional
             Object that is called in each iteration.
         """
         self.op = op
         self.x0 = x0
         self.niter = niter
-        self.zero_seq = zero_seq
+        self.zero_seq_gen = zero_seq_gen
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
             callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
-        out[:] = self.x0
-        kwargs = {'callback': self.callback}
-        if self.zero_seq is not None:
-            kwargs['zero_seq'] = self.zero_seq
-        iterative.gauss_newton(self.op, out, observation, self.niter,
-                               **kwargs)
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
+        zero_seq = (self.zero_seq_gen() if self.zero_seq_gen is not None else
+                    exp_zero_seq(2.0))
+        iterative.gauss_newton(self.op, out_, observation, self.niter,
+                               callback=self.callback, zero_seq=zero_seq)
+        if out not in self.reco_space:
+            out[:] = out_
         return out
 
 
@@ -267,10 +282,15 @@ class KaczmarzReconstructor(IterativeReconstructor):
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
-        out[:] = self.x0
-        iterative.kaczmarz(self.ops, out, observation, self.niter,
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
+        iterative.kaczmarz(self.ops, out_, observation, self.niter,
                            self.omega, self.projection, self.random,
                            self.callback, self.callback_loop)
+        if out not in self.reco_space:
+            out[:] = out_
         return out
 
 
@@ -325,9 +345,14 @@ class LandweberReconstructor(IterativeReconstructor):
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
-        out[:] = self.x0
-        iterative.landweber(self.op, out, observation, self.niter,
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
+        iterative.landweber(self.op, out_, observation, self.niter,
                             self.omega, self.projection, self.callback)
+        if out not in self.reco_space:
+            out[:] = out_
         return out
 
 
@@ -392,13 +417,18 @@ class MLEMReconstructor(IterativeReconstructor):
             callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
-        out[:] = self.x0
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
         observation = self.observation_space.element(observation)
         if not self.os_mode:
             observation = [observation]
-        statistical.osmlem(self.op, out, observation, self.niter,
+        statistical.osmlem(self.op, out_, observation, self.niter,
                            noise=self.noise, callback=self.callback,
                            sensitivities=self.sensitivities)
+        if out not in self.reco_space:
+            out[:] = out_
         return out
 
 
@@ -492,17 +522,22 @@ class ISTAReconstructor(IterativeReconstructor):
         # switched in odl compared to the usage in the FISTA paper
         # (https://epubs.siam.org/doi/abs/10.1137/080716542).
         observation = self.observation_space.element(observation)
-        out[:] = self.x0
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
         l2_norm_sq_trans = L2NormSquared(self.op.range).translated(observation)
         discrepancy = l2_norm_sq_trans * self.op
         if not self.accelerated:
             proximal_gradient_solvers.proximal_gradient(
-                out, self.reg, discrepancy, self.gamma, self.niter,
+                out_, self.reg, discrepancy, self.gamma, self.niter,
                 callback=self.callback, lam=self.lam)
         else:
             proximal_gradient_solvers.accelerated_proximal_gradient(
-                out, self.reg, discrepancy, self.gamma, self.niter,
+                out_, self.reg, discrepancy, self.gamma, self.niter,
                 callback=self.callback, lam=self.lam)
+        if out not in self.reco_space:
+            out[:] = out_
         return out
 
 
@@ -553,7 +588,10 @@ class PDHGReconstructor(IterativeReconstructor):
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
-        out[:] = self.x0
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
         gradient = Gradient(self.op.domain)
         L = BroadcastOperator(self.op, gradient)
         f = ZeroFunctional(self.op.domain)
@@ -561,8 +599,10 @@ class PDHGReconstructor(IterativeReconstructor):
         l1_norm = self.lam * L1Norm(gradient.range)
         g = SeparableSum(l2_norm, l1_norm)
         tau, sigma = primal_dual_hybrid_gradient.pdhg_stepsize(L)
-        primal_dual_hybrid_gradient.pdhg(out, f, g, L, self.niter,
+        primal_dual_hybrid_gradient.pdhg(out_, f, g, L, self.niter,
                                          tau, sigma, callback=self.callback)
+        if out not in self.reco_space:
+            out[:] = out_
         return out
 
 
@@ -612,7 +652,10 @@ class DouglasRachfordReconstructor(IterativeReconstructor):
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
-        out[:] = self.x0
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
         gradient = Gradient(self.op.domain)
         L = BroadcastOperator(self.op, gradient)
         f = ZeroFunctional(self.op.domain)
@@ -620,8 +663,10 @@ class DouglasRachfordReconstructor(IterativeReconstructor):
         l1_norm = self.lam * L1Norm(gradient.range)
         g = [l2_norm, l1_norm]
         tau, sigma = douglas_rachford.douglas_rachford_pd_stepsize(L)
-        douglas_rachford.douglas_rachford_pd(out, f, g, L, self.niter, tau,
+        douglas_rachford.douglas_rachford_pd(out_, f, g, L, self.niter, tau,
                                              sigma, callback=self.callback)
+        if out not in self.reco_space:
+            out[:] = out_
         return out
 
 
@@ -676,7 +721,10 @@ class ForwardBackwardReconstructor(IterativeReconstructor):
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
-        out[:] = self.x0
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
         gradient = Gradient(self.op.domain)
         L = [self.op, gradient]
         f = ZeroFunctional(self.op.domain)
@@ -689,9 +737,10 @@ class ForwardBackwardReconstructor(IterativeReconstructor):
         sigma_gradient = 45.0 / gradient_norm ** 2
         sigma = [sigma_ray_trafo, sigma_gradient]
         h = ZeroFunctional(self.op.domain)
-        forward_backward_pd(out, f, g, L, h, self.tau, sigma,
+        forward_backward_pd(out_, f, g, L, h, self.tau, sigma,
                             self.niter, callback=self.callback)
-
+        if out not in self.reco_space:
+            out[:] = out_
         return out
 
 
@@ -747,7 +796,10 @@ class ADMMReconstructor(IterativeReconstructor):
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
-        out[:] = self.x0
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
         gradient = Gradient(self.op.domain)
         L = BroadcastOperator(self.op, gradient)
         f = ZeroFunctional(self.op.domain)
@@ -756,8 +808,10 @@ class ADMMReconstructor(IterativeReconstructor):
         g = SeparableSum(l2_norm, l1_norm)
         op_norm = 1.1 * power_method_opnorm(L, maxiter=20)
         sigma = self.tau * op_norm ** 2
-        admm.admm_linearized(out, f, g, L, self.tau, sigma,
+        admm.admm_linearized(out_, f, g, L, self.tau, sigma,
                              self.niter, callback=self.callback)
+        if out not in self.reco_space:
+            out[:] = out_
         return out
 
 
@@ -807,7 +861,10 @@ class BFGSReconstructor(IterativeReconstructor):
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
-        out[:] = self.x0
+        out_ = out
+        if out not in self.reco_space:
+            out_ = self.reco_space.zero()
+        out_[:] = self.x0
         l2_norm = L2NormSquared(self.op.range)
         discrepancy = l2_norm * (self.op - observation)
         gradient = Gradient(self.op.domain)
@@ -817,7 +874,9 @@ class BFGSReconstructor(IterativeReconstructor):
         f = discrepancy + self.lam * regularizer
         opnorm = power_method_opnorm(self.op)
         hessinv_estimate = ScalingOperator(self.op.domain, 1 / opnorm ** 2)
-        newton.bfgs_method(f, out, maxiter=self.niter,
+        newton.bfgs_method(f, out_, maxiter=self.niter,
                            hessinv_estimate=hessinv_estimate,
                            callback=self.callback)
+        if out not in self.reco_space:
+            out[:] = out_
         return out

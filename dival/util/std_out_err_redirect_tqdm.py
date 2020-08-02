@@ -16,7 +16,6 @@ class DummyTqdmFile(object):
     file : file object
         File to write to using :func:`tqdm.write`.
     """
-    file = None
 
     def __init__(self, file):
         """

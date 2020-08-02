@@ -21,12 +21,14 @@ setup(name='dival',
           'scikit-image',
           'scikit-learn',
           'hyperopt',
-          'pydicom',
           'tqdm',
           'matplotlib',
           'h5py',
           'requests',
           'packaging'
       ],
+      extras_require={
+          'torch_learned_reconstructors': ['torch']
+      },
       include_package_data=True,
       zip_safe=False)

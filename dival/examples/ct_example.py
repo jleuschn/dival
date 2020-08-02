@@ -70,6 +70,8 @@ print(results)
 # %% plot reconstructions
 fig = results.plot_all_reconstructions(fig_size=(9, 4), vrange='individual')
 
-# %% plot convergence
+# %% plot convergence of CG
 results.plot_convergence(1, fig_size=(9, 6), gridspec_kw={'hspace': 0.5})
-results.plot_performance(PSNR)
+
+# %% plot performance
+results.plot_performance(PSNR, figsize=(10, 4))

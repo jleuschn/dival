@@ -17,7 +17,8 @@ import odl.tomo
 from dival.datasets.dataset import Dataset
 from dival.config import CONFIG, set_config
 from dival.util.constants import MU_MAX
-from dival.util.zenodo_download import download_zenodo_record, input_yes_no
+from dival.util.zenodo_download import download_zenodo_record
+from dival.util.input import input_yes_no
 
 
 try:
@@ -114,6 +115,8 @@ class LoDoPaBDataset(Dataset):
         ``True``
     num_elements_per_sample
         ``2``
+    ray_trafo : :class:`odl.tomo.RayTransform`
+        Ray transform corresponding to the noiseless forward operator.
     sorted_by_patient : bool
         Whether the samples are sorted by patient id.
         Default: ``False``.
@@ -654,8 +657,15 @@ class LoDoPaBDataset(Dataset):
         """
         Return indices that allow access to each dataset part in patient id
         order.
+
         *Note:* in most cases this method should not be called directly. Rather
         specify ``sorted_by_patient=True`` to the constructor if applicable.
+        A plausible use case of this method, however, is to access existing
+        cache files that were created with ``sorted_by_patient=False``.
+        In this case, the dataset should be constructed with
+        ``sorted_by_patient=False``, wrapped by a :class:`CachedDataset`
+        and then reordered with :class:`ReorderedDataset` using the indices
+        returned by this method.
 
         Parameters
         ----------

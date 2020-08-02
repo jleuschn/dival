@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """Provides standard datasets for benchmarking.
 """
+from warnings import warn
 import numpy as np
 from skimage.transform import resize
 import odl
 from dival.datasets.ellipses_dataset import EllipsesDataset
 from dival.datasets.lodopab_dataset import LoDoPaBDataset
+from dival.datasets.angle_subset_dataset import get_angle_subset_dataset
 
 
 STANDARD_DATASET_NAMES = ['ellipses', 'lodopab']
@@ -25,13 +27,19 @@ def get_standard_dataset(name, **kwargs):
             and white gaussian noise with a standard deviation of 2.5% (i.e.
             ``0.025 * mean(abs(observation))``) is added.
 
-            The ray transform that corresponds to the (noiseless) forward
-            operator is stored in the attribute `ray_trafo` of the dataset.
-
             In order to avoid the inverse crime, the ground truth images of
             shape (128, 128) are upscaled by bilinear interpolation to a
             resolution of (400, 400) before the ray transform is applied (whose
-            discretization is different from the one of `ray_trafo`).
+            discretization is different from the one of :attr:`ray_trafo`).
+            
+            Attributes of the returned dataset:
+                `ray_trafo` : :class:`odl.tomo.RayTransform`
+                    Ray transform corresponding to the noiseless forward
+                    operator.
+                ``get_ray_trafo(**kwargs)`` : function
+                    Function that returns a ray transform corresponding to the
+                    noiseless forward operator. Keyword arguments (e.g. `impl`)
+                    are forwarded to the :class:`RayTransform` constructor.
 
         ``'lodopab'``
             The LoDoPaB-CT dataset, which is documented in the
@@ -47,11 +55,16 @@ def get_standard_dataset(name, **kwargs):
             1000 angles and 513 detector pixels is used. Poisson noise
             corresponding to 4096 incident photons per pixel before attenuation
             is applied to the projection data.
-
-            A ray transform that corresponds to the noiseless forward operator
-            is available via
-            :meth:`~dival.datasets.LoDoPaBDataset.get_ray_trafo` from this
-            dataset.
+            
+            Attributes of the returned dataset:
+                `ray_trafo` : :class:`odl.tomo.RayTransform`
+                    Ray transform corresponding to the noiseless forward
+                    operator.
+            Methods of the returned dataset:
+                ``get_ray_trafo(**kwargs)``
+                    Function that returns a ray transform corresponding to the
+                    noiseless forward operator. Keyword arguments (e.g. `impl`)
+                    are forwarded to the :class:`RayTransform` constructor.
 
     Parameters
     ----------
@@ -69,6 +82,9 @@ def get_standard_dataset(name, **kwargs):
                     Seeds to use for random ellipse generation, passed to
                     :class:`.EllipsesDataset`.
             ``'lodopab'``
+                num_angles : int, optional
+                    Number of angles to use from the full 1000 angles.
+                    Must be a divisor of 1000.
                 observation_model : {``'post-log'``, ``'pre-log'``}, optional
                     The observation model to use. Default is ``'post-log'``.
                 min_photon_count : float, optional
@@ -77,6 +93,13 @@ def get_standard_dataset(name, **kwargs):
                     than zero is required in order to avoid undefined values.
                     The default is 0.1, both for ``'post-log'`` and
                     ``'pre-log'`` model.
+                sorted_by_patient : bool, optional
+                    Whether to sort the samples by patient id.
+                    Useful to resplit the dataset.
+                    Default: ``False``.
+                impl : {``'skimage'``, ``'astra_cpu'``, ``'astra_cuda'``},\
+                        optional
+                    Implementation passed to :class:`odl.tomo.RayTransform`
 
     Returns
     -------
@@ -133,11 +156,27 @@ def get_standard_dataset(name, **kwargs):
         dataset.ray_trafo = reco_ray_trafo
 
     elif name == 'lodopab':
-        dataset = LoDoPaBDataset(**kwargs)
+
+        num_angles = kwargs.pop('num_angles', None)
+        lodopab_kwargs = {}
+        for k in ['observation_model', 'min_photon_count', 'sorted_by_patient',
+                  'impl']:
+            if k in kwargs:
+                lodopab_kwargs[k] = kwargs.pop(k)
+
+        dataset = LoDoPaBDataset(**lodopab_kwargs)
+
+        if num_angles is not None:
+            dataset = get_angle_subset_dataset(
+                dataset, num_angles, impl=kwargs.get('impl', 'astra_cuda'))
 
     else:
         raise ValueError("unknown dataset '{}'. Known standard datasets are {}"
                          .format(name, STANDARD_DATASET_NAMES))
+
+    if kwargs:
+        warn('unused keyword arguments: {}'
+             .format(', '.join(kwargs.keys())))
 
     dataset.standard_dataset_name = name
     return dataset

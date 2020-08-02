@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
 import unittest
+import os
 from itertools import islice
 import numpy as np
 import odl
+from dival import get_standard_dataset
 from dival.datasets.dataset import Dataset
 from dival.datasets.lodopab_dataset import LoDoPaBDataset
+from dival.datasets.cached_dataset import CachedDataset, generate_cache_files
+from dival.datasets.angle_subset_dataset import AngleSubsetDataset
 
 
 class TestDataset(unittest.TestCase):
@@ -281,6 +285,298 @@ class TestLoDoPaBDataset(unittest.TestCase):
                 for (s_obs, s_gt), (s2_obs, s2_gt) in zip(samples, samples2):
                     self.assertTrue(np.all(np.asarray(s_obs) == s2_obs))
                     self.assertTrue(np.all(np.asarray(s_gt) == s2_gt))
+
+
+class TestCachedDataset(unittest.TestCase):
+    def setUp(self):
+        class DummyGeneratorDataset(Dataset):
+            def __init__(self):
+                self.space = odl.uniform_discr([0, 0], [1, 1], (1, 1))
+                self.train_len = 20
+                self.validation_len = 2
+                self.test_len = 2
+
+            def generator(self, part='train'):
+                for i in range(self.get_len(part)):
+                    yield self.space.element(i)
+
+        class DummyGeneratorDataset2(Dataset):
+            def __init__(self):
+                self.space = (odl.uniform_discr([0, 0], [1, 1], (4, 4)),
+                              odl.uniform_discr([0, 0], [1, 1], (1, 1)))
+                self.train_len = 20
+                self.validation_len = 2
+                self.test_len = 2
+
+            def generator(self, part='train'):
+                for i in range(self.get_len(part)):
+                    yield (self.space[0].one() * i,
+                           self.space[1].one() * i)
+
+        class DummyRandomAccessDataset(Dataset):
+            def __init__(self):
+                self.space = odl.uniform_discr([0, 0], [1, 1], (1, 1))
+                self.train_len = 20
+                self.validation_len = 2
+                self.test_len = 2
+
+            def get_sample(self, index, part='train', out=None):
+                if index >= self.get_len(part):
+                    raise ValueError('index out of bound')
+                if out is None:
+                    out = True
+                if isinstance(out, bool):
+                    out = self.space.zero() if out else None
+                if out is not None:
+                    out[:] = index
+                return out
+
+        class DummyRandomAccessDataset2(Dataset):
+            def __init__(self):
+                self.space = (odl.uniform_discr([0, 0], [1, 1], (4, 4)),
+                              odl.uniform_discr([0, 0], [1, 1], (1, 1)))
+                self.train_len = 20
+                self.validation_len = 2
+                self.test_len = 2
+
+            def get_sample(self, index, part='train', out=None):
+                if index >= self.get_len(part):
+                    raise ValueError('index out of bound')
+                if out is None:
+                    out = (True, True)
+                out0, out1 = out
+                if isinstance(out0, bool):
+                    out0 = self.space[0].zero() if out0 else None
+                if isinstance(out[1], bool):
+                    out1 = self.space[1].zero() if out1 else None
+                if out0 is not None:
+                    out0[:] = self.space[0].one() * index
+                if out1 is not None:
+                    out1[:] = self.space[1].one() * index
+                return (out0, out1)
+
+        self.dgen1 = DummyGeneratorDataset()
+        self.dgen2 = DummyGeneratorDataset2()
+        self.d1 = DummyRandomAccessDataset()
+        self.d2 = DummyRandomAccessDataset2()
+
+    def test_generator(self):
+        cache_files = {'train': 'train.npy',
+                       'validation': 'validation.npy'}
+        size = {'train': 10, 'validation': 1}
+        generate_cache_files(self.dgen1, cache_files, size=size)
+        cd = CachedDataset(self.dgen1, self.dgen1.space, cache_files,
+                           size=size)
+        self.assertEqual(cd.get_len('train'), size['train'])
+        self.assertEqual(cd.get_len('validation'), size['validation'])
+        self.assertEqual(cd.get_len('test'), self.dgen1.get_len('test'))
+        self.assertEqual(cd.get_num_elements_per_sample(),
+                         self.dgen1.get_num_elements_per_sample())
+        for part in ['train', 'validation', 'test']:
+            len_counter = 0
+            for s, cs in zip(self.dgen1.generator(part), cd.generator(part)):
+                self.assertTrue(np.all(np.asarray(cs) == np.asarray(s)))
+                len_counter += 1
+            self.assertEqual(len_counter, cd.get_len(part))
+        for f in cache_files.values():
+            os.remove(f)
+
+        cache_files = {
+            'train': ('train_obs.npy', 'train_gt.npy'),
+            'validation': ('validation_obs.npy', 'validation_gt.npy')}
+        size = {'train': 10, 'validation': 1}
+        generate_cache_files(self.dgen2, cache_files, size=size)
+        cd = CachedDataset(self.dgen2, self.dgen2.space, cache_files,
+                           size=size)
+        self.assertEqual(cd.get_len('train'), size['train'])
+        self.assertEqual(cd.get_len('validation'), size['validation'])
+        self.assertEqual(cd.get_len('test'), self.dgen2.get_len('test'))
+        self.assertEqual(cd.get_num_elements_per_sample(),
+                         self.dgen2.get_num_elements_per_sample())
+        for part in ['train', 'validation', 'test']:
+            len_counter = 0
+            for s, cs in zip(self.dgen2.generator(part), cd.generator(part)):
+                self.assertEqual(len(cs), len(s))
+                for s_, cs_ in zip(s, cs):
+                    self.assertTrue(np.all(np.asarray(cs_) == np.asarray(s_)))
+                len_counter += 1
+            self.assertEqual(len_counter, cd.get_len(part))
+        for files in cache_files.values():
+            for f in files:
+                os.remove(f)
+
+        # previous test was using caches for all elements, now test `None`
+        cache_files = {
+            'train': ('train_obs.npy', None),
+            'validation': ('validation_obs.npy', None)}
+        size = {'train': 10, 'validation': 1}
+        generate_cache_files(self.dgen2, cache_files, size=size)
+        cd = CachedDataset(self.dgen2, self.dgen2.space, cache_files,
+                           size=size)
+        self.assertEqual(cd.get_len('train'), size['train'])
+        self.assertEqual(cd.get_len('validation'), size['validation'])
+        self.assertEqual(cd.get_len('test'), self.dgen2.get_len('test'))
+        self.assertEqual(cd.get_num_elements_per_sample(),
+                         self.dgen2.get_num_elements_per_sample())
+        for part in ['train', 'validation', 'test']:
+            len_counter = 0
+            for s, cs in zip(self.dgen2.generator(part), cd.generator(part)):
+                self.assertEqual(len(cs), len(s))
+                for s_, cs_ in zip(s, cs):
+                    self.assertTrue(np.all(np.asarray(cs_) == np.asarray(s_)))
+                len_counter += 1
+            self.assertEqual(len_counter, cd.get_len(part))
+        for files in cache_files.values():
+            for f in files:
+                if f is not None:
+                    os.remove(f)
+
+    def test_get_sample(self):
+        cache_files = {'train': 'train.npy',
+                       'validation': 'validation.npy'}
+        size = {'train': 10, 'validation': 1}
+        generate_cache_files(self.d1, cache_files, size=size)
+        cd = CachedDataset(self.d1, self.d1.space, cache_files, size=size)
+        self.assertEqual(cd.get_len('train'), size['train'])
+        self.assertEqual(cd.get_len('validation'), size['validation'])
+        self.assertEqual(cd.get_len('test'), self.d1.get_len('test'))
+        self.assertEqual(cd.get_num_elements_per_sample(),
+                         self.d1.get_num_elements_per_sample())
+        for part in ['train', 'validation', 'test']:
+            for i in range(size.get(part, self.d1.get_len(part))):
+                s = self.d1.get_sample(i, part=part)
+                cs = cd.get_sample(i, part=part)
+                self.assertTrue(np.all(np.asarray(cs) == np.asarray(s)))
+        for f in cache_files.values():
+            os.remove(f)
+
+        cache_files = {
+            'train': ('train_obs.npy', 'train_gt.npy'),
+            'validation': ('validation_obs.npy', 'validation_gt.npy')}
+        size = {'train': 10, 'validation': 1}
+        generate_cache_files(self.d2, cache_files, size=size)
+        cd = CachedDataset(self.d2, self.d2.space, cache_files, size=size)
+        self.assertEqual(cd.get_len('train'), size['train'])
+        self.assertEqual(cd.get_len('validation'), size['validation'])
+        self.assertEqual(cd.get_len('test'), self.d2.get_len('test'))
+        self.assertEqual(cd.get_num_elements_per_sample(),
+                         self.d2.get_num_elements_per_sample())
+        for part in ['train', 'validation', 'test']:
+            for i in range(size.get(part, self.d2.get_len(part))):
+                s = self.d2.get_sample(i, part=part)
+                cs = cd.get_sample(i, part=part)
+                self.assertEqual(len(cs), len(s))
+                for s_, cs_ in zip(s, cs):
+                    self.assertTrue(np.all(np.asarray(cs_) == np.asarray(s_)))
+        for files in cache_files.values():
+            for f in files:
+                os.remove(f)
+
+    def test_get_samples(self):
+        cache_files = {'train': 'train.npy',
+                       'validation': 'validation.npy'}
+        size = {'train': 10, 'validation': 1}
+        generate_cache_files(self.d1, cache_files, size=size)
+        cd = CachedDataset(self.d1, self.d1.space, cache_files, size=size)
+        self.assertEqual(cd.get_len('train'), size['train'])
+        self.assertEqual(cd.get_len('validation'), size['validation'])
+        self.assertEqual(cd.get_len('test'), self.d1.get_len('test'))
+        self.assertEqual(cd.get_num_elements_per_sample(),
+                         self.d1.get_num_elements_per_sample())
+        for part in ['train', 'validation', 'test']:
+            range_ = range(size.get(part, self.d1.get_len(part)))
+            s = self.d1.get_samples(range_, part=part)
+            cs = cd.get_samples(range_, part=part)
+            self.assertEqual(cs.shape, s.shape)
+            self.assertTrue(np.all(cs == s))
+        for f in cache_files.values():
+            os.remove(f)
+
+        cache_files = {
+            'train': ('train_obs.npy', 'train_gt.npy'),
+            'validation': ('validation_obs.npy', 'validation_gt.npy')}
+        size = {'train': 10, 'validation': 1}
+        generate_cache_files(self.d2, cache_files, size=size)
+        cd = CachedDataset(self.d2, self.d2.space, cache_files, size=size)
+        self.assertEqual(cd.get_len('train'), size['train'])
+        self.assertEqual(cd.get_len('validation'), size['validation'])
+        self.assertEqual(cd.get_len('test'), self.d2.get_len('test'))
+        self.assertEqual(cd.get_num_elements_per_sample(),
+                         self.d2.get_num_elements_per_sample())
+        for part in ['train', 'validation', 'test']:
+            range_ = range(size.get(part, self.d2.get_len(part)))
+            s = self.d2.get_samples(range_, part=part)
+            cs = cd.get_samples(range_, part=part)
+            self.assertEqual(len(cs), len(s))
+            for s_, cs_ in zip(s, cs):
+                self.assertEqual(cs_.shape, s_.shape)
+                self.assertTrue(np.all(cs_ == s_))
+        for files in cache_files.values():
+            for f in files:
+                os.remove(f)
+
+
+class TestAngleSubsetDataset(unittest.TestCase):
+    def test_get_ray_trafo(self):
+        d = get_standard_dataset('ellipses', fixed_seeds=True, impl='skimage')
+        for angle_indices in (
+                range(0, d.shape[0][0], 2),
+                range(0, d.shape[0][0] // 2),
+                range(d.shape[0][0] // 2, d.shape[0][0]),
+                np.concatenate(
+                    [np.arange(0, int(d.shape[0][0] * 1/4)),
+                     np.arange(int(d.shape[0][0] * 3/4), d.shape[0][0])])):
+            asd = AngleSubsetDataset(d, angle_indices)
+            ray_trafo = asd.get_ray_trafo(impl='skimage')
+            self.assertEqual(ray_trafo.range.shape[0], len(angle_indices))
+            angles_subset = d.get_ray_trafo(impl='skimage').geometry.angles[
+                np.asarray(angle_indices)]
+            self.assertEqual(ray_trafo.geometry.angles.shape, angles_subset.shape)
+            self.assertTrue(np.all(ray_trafo.geometry.angles == angles_subset))
+
+    def test_generator(self):
+        d = get_standard_dataset('ellipses', fixed_seeds=True, impl='skimage')
+        angle_indices = range(0, d.shape[0][0], 2)
+        asd = AngleSubsetDataset(d, angle_indices)
+        test_data_asd = asd.get_data_pairs('train', 3)
+        test_data = d.get_data_pairs('train', 3)
+        for (obs_asd, gt_asd), (obs, gt) in zip(test_data_asd, test_data):
+            obs_subset = np.asarray(obs)[np.asarray(angle_indices), :]
+            self.assertEqual(obs_asd.shape, obs_subset.shape)
+            self.assertEqual(gt_asd.shape, gt.shape)
+            self.assertTrue(np.all(np.asarray(obs_asd) == obs_subset))
+            self.assertTrue(np.all(np.asarray(gt_asd) == np.asarray(gt)))
+
+    def test_get_sample(self):
+        # TODO: use dataset that is always available instead of lodopab
+        if not LoDoPaBDataset.check_for_lodopab():
+            return
+        d = LoDoPaBDataset(impl='skimage')
+        angle_indices = range(0, d.shape[0][0], 2)
+        asd = AngleSubsetDataset(d, angle_indices)
+        for i in range(3):
+            obs_asd, gt_asd = asd.get_sample(i)
+            obs, gt = d.get_sample(i)
+            obs_subset = np.asarray(obs)[np.asarray(angle_indices), :]
+            self.assertEqual(obs_asd.shape, obs_subset.shape)
+            self.assertEqual(gt_asd.shape, gt.shape)
+            self.assertTrue(np.all(np.asarray(obs_asd) == obs_subset))
+            self.assertTrue(np.all(np.asarray(gt_asd) == np.asarray(gt)))
+
+    def test_get_samples(self):
+        # TODO: use dataset that is always available instead of lodopab
+        if not LoDoPaBDataset.check_for_lodopab():
+            return
+        d = LoDoPaBDataset(impl='skimage')
+        angle_indices = range(0, d.shape[0][0], 2)
+        asd = AngleSubsetDataset(d, angle_indices)
+        obs_arr_asd, gt_arr_asd = asd.get_samples(range(3))
+        obs_arr, gt_arr = d.get_samples(range(3))
+        obs_arr_subset = np.asarray(obs_arr)[:, np.asarray(angle_indices), :]
+        self.assertEqual(obs_arr_asd.shape, obs_arr_subset.shape)
+        self.assertEqual(gt_arr_asd.shape, gt_arr.shape)
+        self.assertTrue(np.all(np.asarray(obs_arr_asd) == obs_arr_subset))
+        self.assertTrue(np.all(np.asarray(gt_arr_asd) == np.asarray(gt_arr)))
 
 
 if __name__ == '__main__':

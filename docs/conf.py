@@ -23,8 +23,10 @@ from dival import __version__
 # -- Project information -----------------------------------------------------
 
 project = 'Deep Inversion Validation Library'
-copyright = '2019, Johannes Leuschner, Maximilian Schmidt'
-author = 'Johannes Leuschner, Maximilian Schmidt'
+copyright = ('2020, Johannes Leuschner, Maximilian Schmidt, '
+             'Daniel Otero Baguer, David Erzmann')
+author = ('Johannes Leuschner, Maximilian Schmidt, '
+          'Daniel Otero Baguer, David Erzmann')
 
 # The short X.Y version
 version = __version__
@@ -142,7 +144,8 @@ latex_elements = {
 latex_documents = [
     (master_doc, 'DeepInversionValidationLibrary.tex',
      'Deep Inversion Validation Library Documentation',
-     'Hannes Albers, Johannes Leuschner, Maximilian Schmidt', 'manual'),
+     ('Johannes Leuschner, Maximilian Schmidt, '
+      'Daniel Otero Baguer, David Erzmann'), 'manual'),
 ]
 
 
@@ -215,4 +218,4 @@ class MyPythonDomain(PythonDomain):
 def setup(app):
     app.connect("autodoc-skip-member", skip)
     app.add_domain(MyPythonDomain, override=True)
-    app.add_stylesheet('css/custom.css')
+    app.add_css_file('css/custom.css')

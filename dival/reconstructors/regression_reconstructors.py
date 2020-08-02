@@ -42,7 +42,7 @@ class LinRegReconstructor(LearnedReconstructor):
 
     def _reconstruct(self, observation):
         reconstruction = np.dot(self.weights, observation)
-        return uniform_discr_element(reconstruction, self.reco_space)
+        return self.reco_space.element(reconstruction)
 
     def train(self, dataset):
         observation_shape, reco_shape = dataset.get_shape()

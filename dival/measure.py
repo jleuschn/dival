@@ -8,7 +8,7 @@ is used by the :mod:`~dival.evaluation` module.
 from abc import ABC, abstractmethod
 from warnings import warn
 import numpy as np
-from skimage.measure import compare_ssim
+from skimage.metrics import structural_similarity
 from odl.operator.operator import Operator
 
 
@@ -40,15 +40,21 @@ class Measure(ABC):
         Name of the measure.
     description : str
         Description of the measure.
-    measure_dict : dict, class attribute
-        Registry of all measures with their :attr:`short_name` as key.
     """
     measure_type = None
+    """Class attribute, default value for :attr:`measure_type`."""
     short_name = ''
+    """Class attribute, default value for :attr:`short_name`."""
     name = ''
+    """Class attribute, default value for :attr:`name`."""
     description = ''
+    """Class attribute, default value for :attr:`description`."""
 
     measure_dict = {}
+    """
+    Class attribute, registry of all measures with their :attr:`short_name` as
+    key.
+    """
 
     def __init__(self, short_name=None):
         """
@@ -229,7 +235,7 @@ class SSIMMeasure(Measure):
 
     def __init__(self, short_name=None, **kwargs):
         """
-        This is a wrapper for :func:`skimage.measure.compare_ssim`.
+        This is a wrapper for :func:`skimage.metrics.structural_similarity`.
         The data range is automatically determined from the ground truth if not
         given to the constructor.
 
@@ -239,7 +245,7 @@ class SSIMMeasure(Measure):
             Short name.
         kwargs : dict, optional
             Keyword arguments that will be passed to
-            :func:`~skimage.measure.compare_ssim` in :meth:`apply`.
+            :func:`~skimage.metrics.structural_similarity` in :meth:`apply`.
             If `data_range` is not specified,
             ``np.max(ground_truth) - np.min(ground_truth)`` is used.
         """
@@ -254,7 +260,7 @@ class SSIMMeasure(Measure):
         gt = np.asarray(ground_truth)
         data_range = (self.data_range if self.data_range is not None
                       else np.max(gt) - np.min(gt))
-        return compare_ssim(reconstruction, gt, data_range=data_range,
+        return structural_similarity(reconstruction, gt, data_range=data_range,
                             **self.kwargs)
 
 
