@@ -290,6 +290,7 @@ def download_params(reconstructor_key_name_or_type, dataset_name,
     hyper_params_url = ('{b}/{d}/{d}_{r}_hyper_params.json'
                         .format(b=DATA_URL, r=r_key_name, d=dataset_name))
     hyper_params_filename = params_path + '_hyper_params.json'
+    os.makedirs(os.path.dirname(hyper_params_filename), exist_ok=True)
     with open(hyper_params_filename, 'wt') as file:
         r = requests.get(hyper_params_url)
         file.write(r.text)
