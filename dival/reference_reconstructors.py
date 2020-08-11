@@ -382,7 +382,7 @@ def check_for_params(reconstructor_key_name_or_type, dataset_name,
                              .format(r_key_name))
     missing = [f for f in files if not os.path.isfile(f)]
     params_exist = not missing
-    return params_exist, missing if return_missing else params_exist
+    return (params_exist, missing) if return_missing else params_exist
 
 def check_for_hyper_params(reconstructor_key_name_or_type, dataset_name):
     """
