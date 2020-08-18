@@ -23,6 +23,16 @@ Currently, the following datasets are included:
 
 These datasets can be accessed by calling ``dival.get_standard_dataset(name)``.
 
+*Note on astra and CUDA:* The CT datasets come with a ``ray_trafo`` attribute providing
+the forward operator.
+There are different backend implementations for it, the default is ``'astra_cuda'``.
+This requires both the [astra-toolbox](https://www.astra-toolbox.com/) and
+a CUDA-enabled GPU being available.
+In order to use the (slow) scikit-image backend instead, you can pass ``impl='skimage'`` to ``get_standard_dataset``. If astra is
+available but CUDA is not, ``impl='astra_cpu'`` is preferred.
+The latest development version of astra can be installed with
+``conda install astra-toolbox -c astra-toolbox/label/dev``.
+
 ## Contribute
 
 We would like to include more reconstruction methods. If you know of classical
