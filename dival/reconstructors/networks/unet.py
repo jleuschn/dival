@@ -114,7 +114,6 @@ class UpBlock(nn.Module):
                 nn.LeakyReLU(0.2, inplace=True))
         else:
             self.conv = nn.Sequential(
-                nn.BatchNorm2d(in_ch + skip_ch),
                 nn.Conv2d(in_ch + skip_ch, out_ch, kernel_size, stride=1,
                           padding=to_pad),
                 nn.LeakyReLU(0.2, inplace=True),

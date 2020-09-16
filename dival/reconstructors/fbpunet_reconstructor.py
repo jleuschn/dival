@@ -92,7 +92,7 @@ class FBPUNetReconstructor(StandardLearnedReconstructor):
                  'by setting the attribute '
                  '``dataset.fbp_dataset = get_cached_fbp_dataset(...)``.')
             fbp_dataset = FBPDataset(
-                dataset, self.op, filter_type=self.filter_type,
+                dataset, self.non_normed_op, filter_type=self.filter_type,
                 frequency_scaling=self.frequency_scaling)
 
         if not fbp_dataset.supports_random_access():
