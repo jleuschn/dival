@@ -1,11 +1,12 @@
 from itertools import islice
 import numpy as np
+from numpy.lib.format import open_memmap
 from tqdm import tqdm
 
 from dival.datasets import Dataset
 
 
-def generate_cache_files(dataset, cache_files, size=None):
+def generate_cache_files(dataset, cache_files, size=None, flush_interval=1000):
     """
     Generate cache files for :class:`CachedDataset`.
 
@@ -35,6 +36,10 @@ def generate_cache_files(dataset, cache_files, size=None):
         Numbers of samples to cache for each dataset part.
         If a field is omitted or has value `None`, all samples are cached.
         Default: ``{}``.
+    flush_interval : int, optional
+        Number of samples to retrieve before flushing to file (using memmap).
+        This amount of samples should fit into the systems main memory (RAM).
+        If ``-1``, each file content is only flushed once at the end.
     """
     if size is None:
         size = {}
@@ -45,25 +50,31 @@ def generate_cache_files(dataset, cache_files, size=None):
             if (dataset.get_num_elements_per_sample() == 1
                     and not isinstance(files, tuple)):
                 files = (files,)
-            data = []
+            memmaps = []
             for k in range(dataset.get_num_elements_per_sample()):
                 space = (dataset.space[k]
                          if dataset.get_num_elements_per_sample() > 1 else
                          dataset.space)
-                data.append((None if files[k] is None else
-                             np.empty((num_samples,) + space.shape,
-                                      dtype=space.dtype)))
+                memmaps.append((None if files[k] is None else
+                                open_memmap(
+                                    files[k], mode='w+', dtype=space.dtype,
+                                    shape=(num_samples,) + space.shape)))
             for i, sample in enumerate(tqdm(islice(dataset.generator(part),
                                                    num_samples),
                                             desc=('generating cache for part '
                                                   '\'{}\''.format(part)),
                                             total=num_samples)):
-                for s, d in zip(sample, data):
-                    if d is not None:
-                        d[i] = s
-            for f, d in zip(files, data):
-                if f is not None:
-                    np.save(f, d)
+                for s, m in zip(sample, memmaps):
+                    if m is not None:
+                        m[i] = s
+                if (i + 1) % flush_interval == 0:
+                    for m in memmaps:
+                        if m is not None:
+                            m.flush()
+            for m in memmaps:
+                if m is not None:
+                    del m  # flush completed file
+
 
 
 class CachedDataset(Dataset):
