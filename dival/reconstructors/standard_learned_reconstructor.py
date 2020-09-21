@@ -4,6 +4,7 @@ try:
 except ModuleNotFoundError:
     raise ImportError('missing PyTorch')
 
+import os
 from copy import deepcopy
 from math import ceil
 import odl
@@ -16,6 +17,7 @@ from torch.optim.lr_scheduler import CyclicLR, OneCycleLR
 
 from dival.reconstructors import LearnedReconstructor
 from dival.measure import PSNR
+from dival.util.torch_utility import load_state_dict_convert_data_parallel
 
 
 class StandardLearnedReconstructor(LearnedReconstructor):
@@ -346,17 +348,43 @@ class StandardLearnedReconstructor(LearnedReconstructor):
 
     def save_learned_params(self, path):
         path = path if path.endswith('.pt') else path + '.pt'
+        path = os.path.abspath(path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         torch.save(self.model.state_dict(), path)
 
-    def load_learned_params(self, path, force_parallel=False):
+    def load_learned_params(self, path, convert_data_parallel='auto'):
+        """Load learned parameters from file.
+
+        Parameters
+        ----------
+        path : str
+            Path at which the learned parameters are stored.
+            Implementations may interpret this as a file path or as a directory
+            path for multiple files.
+            If the implementation expects a file path, it should accept it
+            without file ending.
+        convert_data_parallel : bool or {``'auto'``, ``'keep'``}, optional
+            Whether to automatically convert the model weight names if
+            :attr:`model` is a :class:`nn.DataParallel`-model but the stored
+            state dict stems from a non-data-parallel model, or vice versa.
+
+                ``'auto'`` or ``True``:
+                    Auto-convert weight names, depending on the type of
+                    :attr:`model`.
+                ``'keep'`` or ``False``:
+                    Do not convert weight names.
+                    Convert to plain weight names.
+        """
         path = path if path.endswith('.pt') else path + '.pt'
         self.init_model()
         map_location = ('cuda:0' if self.use_cuda and torch.cuda.is_available()
                         else 'cpu')
         state_dict = torch.load(path, map_location=map_location)
 
-        # backwards-compatibility with non-data_parallel weights
-        data_parallel = list(state_dict.keys())[0].startswith('module.')
-        if force_parallel and not data_parallel:
-            state_dict = {('module.' + k): v for k, v in state_dict.items()}
-        self.model.load_state_dict(state_dict)
+        if convert_data_parallel == 'auto' or convert_data_parallel == True:
+            load_state_dict_convert_data_parallel(self.model, state_dict)
+        elif convert_data_parallel == 'keep' or convert_data_parallel == False:
+            self.model.load_state_dict(state_dict)
+        else:
+            raise ValueError("Unknown option '{}' for `convert_data_parallel`"
+                             .format(convert_data_parallel))
