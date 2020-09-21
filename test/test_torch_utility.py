@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 import unittest
-from dival.util.torch_utility import load_state_dict_convert_data_parallel
 try:
     import torch
     TORCH_AVAILABLE = True
 except ModuleNotFoundError:
     TORCH_AVAILABLE = False
+else:
+    from dival.util.torch_utility import load_state_dict_convert_data_parallel
 
 @unittest.skipUnless(TORCH_AVAILABLE, 'PyTorch not available')
 class TestLoadStateDictConvertDataParallel(unittest.TestCase):
