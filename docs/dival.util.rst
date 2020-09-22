@@ -15,6 +15,7 @@ Submodules
    dival.util.plot
    dival.util.std_out_err_redirect_tqdm
    dival.util.torch_losses
+   dival.util.torch_utility
    dival.util.zenodo_download
 
 Module contents
