@@ -22,7 +22,7 @@ class UNet(nn.Module):
         self.use_sigmoid = use_sigmoid
         self.down = nn.ModuleList()
         self.up = nn.ModuleList()
-        self.inc = InBlock(in_ch, channels[0])
+        self.inc = InBlock(in_ch, channels[0], use_norm=use_norm)
         for i in range(1, self.scales):
             self.down.append(DownBlock(in_ch=channels[i - 1],
                                        out_ch=channels[i],
@@ -114,7 +114,6 @@ class UpBlock(nn.Module):
                 nn.LeakyReLU(0.2, inplace=True))
         else:
             self.conv = nn.Sequential(
-                nn.BatchNorm2d(in_ch + skip_ch),
                 nn.Conv2d(in_ch + skip_ch, out_ch, kernel_size, stride=1,
                           padding=to_pad),
                 nn.LeakyReLU(0.2, inplace=True),

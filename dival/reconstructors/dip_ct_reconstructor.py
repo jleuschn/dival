@@ -128,7 +128,7 @@ class DeepImagePriorCTReconstructor(IterativeReconstructor):
 
         self.optimizer = Adam(self.model.parameters(), lr=self.lr)
 
-        y_delta = torch.tensor(observation.asarray(), dtype=torch.float32)
+        y_delta = torch.tensor(np.asarray(observation), dtype=torch.float32)
         y_delta = y_delta.view(1, 1, *y_delta.shape)
         y_delta = y_delta.to(device)
 

@@ -1,4 +1,5 @@
 from warnings import warn
+from functools import partial
 from tqdm import tqdm
 import torch
 import numpy as np
@@ -84,19 +85,23 @@ class TVAdamCTReconstructor(IterativeReconstructor):
             self.ray_trafo, filter_type=self.init_filter_type,
             frequency_scaling=self.init_frequency_scaling)
 
-        self.output = torch.tensor(self.fbp_op(observation))[None]
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        self.output = torch.tensor(self.fbp_op(observation))[None].to(device)
         self.output.requires_grad = True
 
         self.optimizer = Adam([self.output], lr=self.lr)
 
-        y_delta = torch.tensor(observation.asarray(), dtype=torch.float32)
+        y_delta = torch.tensor(np.asarray(observation), dtype=torch.float32)
         y_delta = y_delta.view(1, *y_delta.shape)
-        y_delta = y_delta
+        y_delta = y_delta.to(device)
 
         if self.loss_function == 'mse':
             criterion = MSELoss()
         elif self.loss_function == 'poisson':
-            criterion = poisson_loss
+            criterion = partial(poisson_loss,
+                                photons_per_pixel=self.photons_per_pixel,
+                                mu_max=self.mu_max)
         else:
             warn('Unknown loss function, falling back to MSE')
             criterion = MSELoss()
