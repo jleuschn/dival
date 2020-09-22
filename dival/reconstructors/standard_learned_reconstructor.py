@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 try:
     import torch
-except ModuleNotFoundError:
+except ImportError:
     raise ImportError('missing PyTorch')
 
 import os
