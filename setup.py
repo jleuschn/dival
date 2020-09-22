@@ -28,7 +28,8 @@ setup(name='dival',
           'packaging'
       ],
       extras_require={
-          'torch_learned_reconstructors': ['torch']
+          'torch_learned_reconstructors': ['torch'],
+          'direct_gpu_parallel_beam': ['tomosipo']
       },
       include_package_data=True,
       zip_safe=False)
