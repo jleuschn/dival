@@ -5,7 +5,7 @@ from odl.contrib.torch import OperatorModule
 from odl.tomo import fbp_op
 from odl.operator.operator import OperatorRightScalarMult
 
-from dival.reconstructors import StandardLearnedReconstructor
+from dival.reconstructors.StandardLearnedReconstructor import StandardLearnedReconstructor
 from dival.reconstructors.networks.iterative import PrimalDualNet
 
 
