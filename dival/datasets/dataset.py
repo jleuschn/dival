@@ -213,6 +213,50 @@ class Dataset():
         data_pairs = DataPairs(observations, ground_truth, name=name)
         return data_pairs
 
+    def get_data_pairs_per_index(self, part='train', index=[0]):
+        """
+        Return specificals samples from data part as :class:`.DataPairs` object.
+
+        Only supports datasets with two elements per sample.``
+
+        Parameters
+        ----------
+        part : {``'train'``, ``'validation'``, ``'test'``}, optional
+            The data part. Default is ``'train'``.
+        index : integer or a list of integer, optional
+            Index of the samples in the data part. Default is ``'[0]'``.
+        """
+        if self.get_num_elements_per_sample() != 2:
+            raise ValueError('`get_data_pairs` only supports datasets with'
+                             '2 elements per sample, this dataset has {:d}'
+                             .format(self.get_num_elements_per_sample()))
+        gen = self.generator(part=part)
+        observations, ground_truth = [], []
+
+        if not isinstance(index, list) and not isinstance(index, int):
+             raise ValueError('`index` must be an integer or a list of '
+                             'integers elements')
+        elif(isinstance(index, int)):
+            index = [index]
+
+        min_aux, max_aux = min(index), max(index)
+        if(not (min_aux >= 0 and max_aux <= self.get_len(part) - 1)):
+            raise ValueError('index indicated is not avilabled. The index '
+                             'range must be between 0 and {}'
+                             .format(self.get_len(part) - 1))
+
+        # It's sorted to optimize the neighbor search elements time
+        index.sort()
+        index_bkp = index.copy()
+
+        for i in index:
+            for obs, gt in islice(gen, i, i+1):
+                observations.append(obs)
+                ground_truth.append(gt)
+        name = '{} part: index{}'.format(part, index_bkp)
+        data_pairs = DataPairs(observations, ground_truth, name=name)
+        return data_pairs
+
     def create_torch_dataset(self, part='train', reshape=None):
         """
         Create a torch dataset wrapper for one part of this dataset.
