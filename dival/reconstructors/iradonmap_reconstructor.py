@@ -2,7 +2,8 @@
 import torch.nn as nn
 from copy import deepcopy
 
-from dival.reconstructors.StandardLearnedReconstructor import StandardLearnedReconstructor
+from dival.reconstructors.standard_learned_reconstructor import (
+    StandardLearnedReconstructor)
 from dival.reconstructors.networks.iradonmap import get_iradonmap_model
 
 
