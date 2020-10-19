@@ -6,7 +6,8 @@ import numpy as np
 import torch.nn as nn
 from odl.tomo import fbp_op
 
-from dival.reconstructors import StandardLearnedReconstructor
+from dival.reconstructors.standard_learned_reconstructor import (
+    StandardLearnedReconstructor)
 from dival.reconstructors.networks.unet import UNet
 from dival.datasets.fbp_dataset import FBPDataset
 
