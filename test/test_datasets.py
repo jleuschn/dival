@@ -221,6 +221,93 @@ class TestDataset(unittest.TestCase):
         d2 = DummyDataset2()
         self.assertEqual(d2.supports_random_access(), True)
 
+    def test_get_data_pairs(self):
+        class DummyDataset(Dataset):
+            def __init__(self):
+                self.train_len = 100
+                self.validation_len = 10
+                self.test_len = 10
+                self.num_samples_per_element = 2
+                space = odl.uniform_discr([0, 0], [1, 1], (1, 1))
+                self.space = (space, space)
+
+            def generator(self, part='train'):
+                for i in range(self.get_len(part)):
+                    yield (self.space[0].element(i), self.space[1].element(i))
+
+        d = DummyDataset()
+        PART = 'train'
+        N = 10
+        data_pairs = d.get_data_pairs(PART, n=N)
+        gen = d.generator(part=PART)
+        for (obs2, gt2), (obs, gt) in zip(data_pairs, gen):
+            self.assertEqual(obs2, obs)
+            self.assertEqual(gt2, gt)
+
+        data_pairs2 = d.get_data_pairs_per_index(PART, index=list(range(N)))
+        gen = d.generator(part=PART)
+        for (obs2, gt2), (obs, gt) in zip(data_pairs2, gen):
+            self.assertEqual(obs2, obs)
+            self.assertEqual(gt2, gt)
+
+        INDEX = [4, 3, 3, 5]
+        data_pairs2 = d.get_data_pairs_per_index(PART, index=INDEX)
+        data_pairs_all = d.get_data_pairs(PART, n=max(INDEX)+1)
+        for j, i in enumerate(INDEX):
+            obs2, gt2 = data_pairs2[j]
+            obs, gt = data_pairs_all[i]
+            self.assertEqual(obs2, obs)
+            self.assertEqual(gt2, gt)
+
+        class DummyDataset2(Dataset):
+            def __init__(self):
+                self.train_len = 100
+                self.validation_len = 10
+                self.test_len = 10
+                self.num_samples_per_element = 2
+                self.random_access = True
+                space = odl.uniform_discr([0, 0], [1, 1], (1, 1))
+                self.space = (space, space)
+
+            def get_sample(self, index, part='train', out=None):
+                if index >= self.get_len(part):
+                    raise ValueError('index out of bound')
+                if out is None:
+                    out = (True, True)
+                out0, out1 = out
+                if isinstance(out0, bool):
+                    out0 = self.space[0].zero() if out0 else None
+                if isinstance(out[1], bool):
+                    out1 = self.space[1].zero() if out1 else None
+                if out0 is not None:
+                    out0[:] = self.space[0].one() * index
+                if out1 is not None:
+                    out1[:] = self.space[1].one() * index
+                return (out0, out1)
+
+        d = DummyDataset2()
+        PART = 'train'
+        N = 10
+        data_pairs = d.get_data_pairs(PART, n=N)
+        gen = d.generator(part=PART)
+        for (obs2, gt2), (obs, gt) in zip(data_pairs, gen):
+            self.assertEqual(obs2, obs)
+            self.assertEqual(gt2, gt)
+
+        data_pairs2 = d.get_data_pairs_per_index(PART, index=list(range(N)))
+        gen = d.generator(part=PART)
+        for (obs2, gt2), (obs, gt) in zip(data_pairs2, gen):
+            self.assertEqual(obs2, obs)
+            self.assertEqual(gt2, gt)
+
+        INDEX = [4, 3, 3, 5]
+        data_pairs2 = d.get_data_pairs_per_index(PART, index=INDEX)
+        data_pairs_all = d.get_data_pairs(PART, n=max(INDEX)+1)
+        for j, i in enumerate(INDEX):
+            obs2, gt2 = data_pairs2[j]
+            obs, gt = data_pairs_all[i]
+            self.assertEqual(obs2, obs)
+            self.assertEqual(gt2, gt)
 
 class TestLoDoPaBDataset(unittest.TestCase):
     def test_patient_ids(self):

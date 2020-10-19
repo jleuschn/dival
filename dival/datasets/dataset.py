@@ -213,6 +213,75 @@ class Dataset():
         data_pairs = DataPairs(observations, ground_truth, name=name)
         return data_pairs
 
+    def get_data_pairs_per_index(self, part='train', index=None):
+        """
+        Return specific samples from data part as :class:`.DataPairs` object.
+
+        Only supports datasets with two elements per sample.
+
+        For datasets not supporting random access, samples are extracted from
+        :meth:`generator`, which can be computationally expensive.
+
+        Parameters
+        ----------
+        part : {``'train'``, ``'validation'``, ``'test'``}, optional
+            The data part. Default is ``'train'``.
+        index : int or list of int, optional
+            Indices of the samples in the data part. Default is ``'[0]'``.
+        """
+        if self.get_num_elements_per_sample() != 2:
+            raise ValueError('`get_data_pairs` only supports datasets with'
+                             '2 elements per sample, this dataset has {:d}'
+                             .format(self.get_num_elements_per_sample()))
+        if index is None:
+            index = [0]
+
+        if not isinstance(index, list) and not isinstance(index, int):
+             raise ValueError('`index` must be an integer or a list of '
+                              'integer elements')
+        elif isinstance(index, int):
+            index = [index]
+
+        name = '{} part: index{}'.format(part, index)
+
+        if len(index) == 0:
+            data_pairs = DataPairs([], [], name=name)
+            return data_pairs
+
+        if not (min(index) >= 0 and max(index) <= self.get_len(part) - 1):
+            raise ValueError('index out of bounds. All indices must be '
+                             'between 0 and {} (inclusively).'
+                             .format(self.get_len(part) - 1))
+
+        if self.supports_random_access():
+            observations, ground_truth = [], []
+            for current_index in index:
+                obs, gt = self.get_sample(current_index, part=part)
+                observations.append(obs)
+                ground_truth.append(gt)
+        else:
+            gen = self.generator(part=part)
+            observations = [None] * len(index)
+            ground_truth = [None] * len(index)
+            argsort_index = np.argsort(index)
+            c = 0
+            current_index = index[argsort_index[0]]
+
+            for i, (obs, gt) in enumerate(gen):
+                while i == current_index:
+                    observations[argsort_index[c]] = obs
+                    ground_truth[argsort_index[c]] = gt
+                    c += 1
+                    if c == len(index):
+                        break
+                    current_index = index[argsort_index[c]]
+                if c == len(index):
+                    break
+
+        name = '{} part: index{}'.format(part, index)
+        data_pairs = DataPairs(observations, ground_truth, name=name)
+        return data_pairs
+
     def create_torch_dataset(self, part='train', reshape=None):
         """
         Create a torch dataset wrapper for one part of this dataset.
