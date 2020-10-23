@@ -12,7 +12,12 @@ import numpy as np
 from tqdm import tqdm
 
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except ImportError:
+    TENSORBOARD_AVAILABLE = False
+else:
+    TENSORBOARD_AVAILABLE = True
 from torch.optim.lr_scheduler import CyclicLR, OneCycleLR
 
 from dival.reconstructors import LearnedReconstructor
@@ -112,6 +117,8 @@ class StandardLearnedReconstructor(LearnedReconstructor):
         self.save_best_learned_params_path = save_best_learned_params_path
         self.torch_manual_seed = torch_manual_seed
         self.model = None
+        self._optimizer = None
+        self._scheduler = None
 
         self._opnorm = None
 
@@ -180,14 +187,18 @@ class StandardLearnedReconstructor(LearnedReconstructor):
                          'validation': len(dataset_validation)}
 
         self.init_scheduler(dataset_train=dataset_train)
-        if self.scheduler is not None:
+        if self._scheduler is not None:
             schedule_every_batch = isinstance(
-                self.scheduler, (CyclicLR, OneCycleLR))
+                self._scheduler, (CyclicLR, OneCycleLR))
 
         best_model_wts = deepcopy(self.model.state_dict())
         best_psnr = 0
 
         if self.log_dir is not None:
+            if not TENSORBOARD_AVAILABLE:
+                raise ImportError(
+                    'Missing tensorboard. Please install it or disable '
+                    'logging by specifying `log_dir=None`.')
             writer = SummaryWriter(log_dir=self.log_dir, max_queue=0)
             validation_samples = dataset.get_data_pairs(
                 'validation', self.log_num_validation_samples)
@@ -216,7 +227,7 @@ class StandardLearnedReconstructor(LearnedReconstructor):
                         labels = labels.to(self.device)
 
                         # zero the parameter gradients
-                        self.optimizer.zero_grad()
+                        self._optimizer.zero_grad()
 
                         # forward
                         # track gradients only if in train phase
@@ -229,10 +240,10 @@ class StandardLearnedReconstructor(LearnedReconstructor):
                                 loss.backward()
                                 torch.nn.utils.clip_grad_norm_(
                                     self.model.parameters(), max_norm=1)
-                                self.optimizer.step()
-                                if (self.scheduler is not None and
+                                self._optimizer.step()
+                                if (self._scheduler is not None and
                                         schedule_every_batch):
-                                    self.scheduler.step()
+                                    self._scheduler.step()
 
                         for i in range(outputs.shape[0]):
                             labels_ = labels[i, 0].detach().cpu().numpy()
@@ -250,13 +261,16 @@ class StandardLearnedReconstructor(LearnedReconstructor):
                             step = (epoch * ceil(dataset_sizes['train']
                                                  / self.batch_size)
                                     + ceil(running_size / self.batch_size))
-                            writer.add_scalar('loss/{}'.format(phase),
-                                              torch.tensor(running_loss/running_size), step)
-                            writer.add_scalar('psnr/{}'.format(phase),
-                                              torch.tensor(running_psnr/running_size), step)
+                            writer.add_scalar(
+                                'loss/{}'.format(phase),
+                                torch.tensor(running_loss/running_size), step)
+                            writer.add_scalar(
+                                'psnr/{}'.format(phase),
+                                torch.tensor(running_psnr/running_size), step)
 
-                    if self.scheduler is not None and not schedule_every_batch:
-                        self.scheduler.step()
+                    if (self._scheduler is not None
+                            and not schedule_every_batch):
+                        self._scheduler.step()
 
                     epoch_loss = running_loss / dataset_sizes[phase]
                     epoch_psnr = running_psnr / dataset_sizes[phase]
@@ -317,7 +331,20 @@ class StandardLearnedReconstructor(LearnedReconstructor):
         dataset_train : :class:`torch.utils.data.Dataset`
             The training (torch) dataset constructed in :meth:`train`.
         """
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        self._optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+
+    @property
+    def optimizer(self):
+        """
+        :class:`torch.optim.Optimizer` :
+        The optimizer, usually set by :meth:`init_optimizer`, which gets called
+        in :meth:`train`.
+        """
+        return self._optimizer
+
+    @optimizer.setter
+    def optimizer(self, value):
+        self._optimizer = value
 
     def init_scheduler(self, dataset_train):
         """
@@ -329,10 +356,23 @@ class StandardLearnedReconstructor(LearnedReconstructor):
         dataset_train : :class:`torch.utils.data.Dataset`
             The training (torch) dataset constructed in :meth:`train`.
         """
-        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            self.optimizer, max_lr=self.lr,
+        self._scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            self._optimizer, max_lr=self.lr,
             steps_per_epoch=ceil(len(dataset_train) / self.batch_size),
             epochs=self.epochs)
+
+    @property
+    def scheduler(self):
+        """
+        torch learning rate scheduler :
+        The scheduler, usually set by :meth:`init_scheduler`, which gets called
+        in :meth:`train`.
+        """
+        return self._scheduler
+
+    @scheduler.setter
+    def scheduler(self, value):
+        self._scheduler = value
 
     def _reconstruct(self, observation):
         self.model.eval()

@@ -29,6 +29,7 @@ setup(name='dival',
       ],
       extras_require={
           'torch_learned_reconstructors': ['torch'],
+          'training_logs': ['tensorboard'],
           'direct_gpu_parallel_beam': ['tomosipo']
       },
       include_package_data=True,
