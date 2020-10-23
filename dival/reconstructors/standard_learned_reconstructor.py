@@ -12,7 +12,12 @@ import numpy as np
 from tqdm import tqdm
 
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except ImportError:
+    TENSORBOARD_AVAILABLE = False
+else:
+    TENSORBOARD_AVAILABLE = True
 from torch.optim.lr_scheduler import CyclicLR, OneCycleLR
 
 from dival.reconstructors import LearnedReconstructor
@@ -188,6 +193,10 @@ class StandardLearnedReconstructor(LearnedReconstructor):
         best_psnr = 0
 
         if self.log_dir is not None:
+            if not TENSORBOARD_AVAILABLE:
+                raise ImportError(
+                    'Missing tensorboard. Please install it or disable '
+                    'logging by specifying `log_dir=None`.')
             writer = SummaryWriter(log_dir=self.log_dir, max_queue=0)
             validation_samples = dataset.get_data_pairs(
                 'validation', self.log_num_validation_samples)
