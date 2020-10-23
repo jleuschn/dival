@@ -121,7 +121,10 @@ class FBPUNetReconstructor(StandardLearnedReconstructor):
 
     def init_scheduler(self, dataset_train):
         if self.scheduler.lower() == 'cosine':
-            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            # need to set private self._scheduler because self.scheduler
+            # property accesses hyper parameter of same name,
+            # i.e. self.hyper_params['scheduler']
+            self._scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer,
                 T_max=self.epochs,
                 eta_min=self.lr_min)
