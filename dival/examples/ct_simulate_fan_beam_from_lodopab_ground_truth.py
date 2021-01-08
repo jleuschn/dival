@@ -171,7 +171,7 @@ dataset.ray_trafo = reco_ray_trafo
 #     * Simulating on the fly might be too slow.
 #     * Potential irreproducibility, e.g. due to changes in used libraries.
 
-# %% optional: plot first three train images and fbp reconstructions
+# %% plot first three train images and fbp reconstructions
 import matplotlib.pyplot as plt
 from dival.util.plot import plot_images
 from dival.measure import PSNR, SSIM
@@ -183,6 +183,7 @@ for i, (obs, gt) in islice(enumerate(dataset.generator(part='train')), 3):
     reco = fbp_reconstructor.reconstruct(obs)
     reco = np.clip(reco, 0., 1.)
     _, ax = plot_images([reco, gt], fig_size=(10, 4))
+    ax[0].figure.suptitle('train sample {:d}'.format(i))
     ax[0].set_title('FBP reconstruction')
     ax[1].set_title('Ground truth')
     psnr = PSNR(reco, gt)
@@ -193,36 +194,40 @@ for i, (obs, gt) in islice(enumerate(dataset.generator(part='train')), 3):
 plt.show()
 
 # %% simulate and store fan beam observations
+SKIP_SIMULATION = False
 
-from dival.util.input import input_yes_no
-print('start simulating and storing fan beam observations for all lodopab '
-      'ground truth samples? [y]/n')
-input_yes_no()
+if not SKIP_SIMULATION:
+    from dival.util.input import input_yes_no
+    print('start simulating and storing fan beam observations for all lodopab '
+          'ground truth samples? [y]/n')
+    if not input_yes_no():
+        raise RuntimeError('cancelled by user')
 
-obs_shape = dataset.ray_trafo.range.shape
-for part in ['train', 'validation', 'test']:
-    for i, (obs, gt) in enumerate(tqdm(
-            dataset.generator(part),
-            desc='simulating part \'{}\''.format(part),
-            total=dataset.get_len(part))):
-        filenumber = i // NUM_SAMPLES_PER_FILE
-        idx_in_file = i % NUM_SAMPLES_PER_FILE
-        obs_filename = os.path.join(
-            DATA_PATH,
-            '{}_{}_{:03d}.hdf5'.format(OBSERVATION_NAME, part, filenumber))
-        with h5py.File(obs_filename, 'a') as observation_file:
-            observation_dataset = observation_file.require_dataset(
-                'data', shape=(NUM_SAMPLES_PER_FILE,) + obs_shape,
-                maxshape=(NUM_SAMPLES_PER_FILE,) + obs_shape,
-                dtype=np.float32, exact=True, fillvalue=np.nan, chunks=True)
-            observation_dataset[idx_in_file] = obs
+    obs_shape = dataset.ray_trafo.range.shape
+    for part in ['train', 'validation', 'test']:
+        for i, (obs, gt) in enumerate(tqdm(
+                dataset.generator(part),
+                desc='simulating part \'{}\''.format(part),
+                total=dataset.get_len(part))):
+            filenumber = i // NUM_SAMPLES_PER_FILE
+            idx_in_file = i % NUM_SAMPLES_PER_FILE
+            obs_filename = os.path.join(
+                DATA_PATH,
+                '{}_{}_{:03d}.hdf5'.format(OBSERVATION_NAME, part, filenumber))
+            with h5py.File(obs_filename, 'a') as observation_file:
+                observation_dataset = observation_file.require_dataset(
+                    'data', shape=(NUM_SAMPLES_PER_FILE,) + obs_shape,
+                    maxshape=(NUM_SAMPLES_PER_FILE,) + obs_shape,
+                    dtype=np.float32, exact=True, fillvalue=np.nan,
+                    chunks=True)
+                observation_dataset[idx_in_file] = obs
 
-            # resize last file after storing last sample
-            if i == dataset.get_len(part) - 1:
-                n_files = ceil(dataset.get_len(part) / NUM_SAMPLES_PER_FILE)
-                observation_dataset.resize(
-                    dataset.get_len(part) - (n_files-1) * NUM_SAMPLES_PER_FILE,
-                    axis=0)
+                # resize last file after storing last sample
+                if i == dataset.get_len(part) - 1:
+                    n_files = ceil(dataset.get_len(part) / NUM_SAMPLES_PER_FILE)
+                    observation_dataset.resize(
+                        dataset.get_len(part)-(n_files-1)*NUM_SAMPLES_PER_FILE,
+                        axis=0)
 
 # %% class for accessing the stored dataset
 class LoDoPaBFanBeamDataset(Dataset):
@@ -242,6 +247,7 @@ class LoDoPaBFanBeamDataset(Dataset):
         impl : {``'skimage'``, ``'astra_cpu'``, ``'astra_cuda'``}, optional
             Implementation passed to :class:`odl.tomo.RayTransform` to
             construct :attr:`ray_trafo`.
+            Default: ``'astra_cuda'``.
         """
         self.shape = (dataset.ray_trafo.range.shape, (362, 362))
         self.num_elements_per_sample = 2
@@ -257,7 +263,6 @@ class LoDoPaBFanBeamDataset(Dataset):
 
     def generator(self, part='train'):
         num_files = ceil(self.get_len(part) / NUM_SAMPLES_PER_FILE)
-        observation_trafo = self.__get_observation_trafo()
         for i in range(num_files):
             with h5py.File(
                     os.path.join(DATA_PATH,
@@ -273,7 +278,6 @@ class LoDoPaBFanBeamDataset(Dataset):
             for gt_arr, obs_arr in zip(ground_truth_data, observation_data):
                 ground_truth = self.space[1].element(gt_arr)
                 observation = self.space[0].element(obs_arr)
-                observation_trafo(observation)
 
                 yield (observation, ground_truth)
 
@@ -290,8 +294,6 @@ class LoDoPaBFanBeamDataset(Dataset):
         if out is None:
             out = (True, True)
         (out_observation, out_ground_truth) = out
-        if self.sorted_by_patient:
-            index = self._idx_sorted_by_patient[part][index]
         file_index = index // NUM_SAMPLES_PER_FILE
         index_in_file = index % NUM_SAMPLES_PER_FILE
         if isinstance(out_observation, bool):
@@ -311,8 +313,6 @@ class LoDoPaBFanBeamDataset(Dataset):
                 file['data'].read_direct(np.asarray(obs)[np.newaxis],
                                          np.s_[index_in_file:index_in_file+1],
                                          np.s_[0:1])
-            observation_trafo = self.__get_observation_trafo()
-            observation_trafo(obs)
         if gt is not None:
             with h5py.File(
                     os.path.join(DATA_PATH,
@@ -324,6 +324,9 @@ class LoDoPaBFanBeamDataset(Dataset):
         return (obs, gt)
 
     def get_samples(self, key, part='train', out=None):
+        # this function does not have to be reimplemented, but this
+        # implementation is more efficient than the default Dataset.get_samples
+        # that calls get_sample for each of the requested samples
         len_part = self.get_len(part)
         if isinstance(key, slice):
             key_start = (0 if key.start is None else
@@ -396,6 +399,31 @@ class LoDoPaBFanBeamDataset(Dataset):
                     file['data'].read_direct(gt_arr, slc_f, slc_d)
         return (obs_arr, gt_arr)
 
+dataset = LoDoPaBFanBeamDataset(impl=IMPL)
+
+# %% plot last three train images and fbp reconstructions
+import matplotlib.pyplot as plt
+from dival.util.plot import plot_images
+from dival.measure import PSNR, SSIM
+from dival.reconstructors.odl_reconstructors import FBPReconstructor
+fbp_reconstructor = FBPReconstructor(dataset.ray_trafo,
+                                     hyper_params={'filter_type': 'Hann',
+                                                   'frequency_scaling': 1.0})
+for i in range(dataset.get_len(part='train')-3,
+               dataset.get_len(part='train')):
+    obs, gt = dataset.get_sample(i, part='train')
+    reco = fbp_reconstructor.reconstruct(obs)
+    reco = np.clip(reco, 0., 1.)
+    _, ax = plot_images([reco, gt], fig_size=(10, 4))
+    ax[0].figure.suptitle('train sample {:d}'.format(i))
+    ax[0].set_title('FBP reconstruction')
+    ax[1].set_title('Ground truth')
+    psnr = PSNR(reco, gt)
+    ssim = SSIM(reco, gt)
+    ax[0].set_xlabel('PSNR: {:.2f}dB, SSIM: {:.3f}'.format(psnr, ssim))
+    print('metrics for FBP reconstruction on sample {:d}:'.format(i))
+    print('PSNR: {:.2f}dB, SSIM: {:.3f}'.format(psnr, ssim))
+plt.show()
 
 # %% alternative simulation using multiprocessing
 # Below is unfinished code for a parallelized simulation, which could be very
@@ -406,7 +434,6 @@ class LoDoPaBFanBeamDataset(Dataset):
 # The following pickle error occurs:
 #     AttributeError: Can't pickle local object
 #     'FanBeamGeometry.__init__.<locals>.<lambda>'
-
 
 # import multiprocessing
 # from dival.util.odl_utility import apply_noise
@@ -442,3 +469,30 @@ class LoDoPaBFanBeamDataset(Dataset):
 #                 observation_dataset.resize(
 #                     LEN[part] - (n_files - 1) * NUM_SAMPLES_PER_FILE,
 #                     axis=0)
+
+# %% test LoDoPaBFanBeamDataset
+# import unittest
+
+# class TestLoDoPaBDataset(unittest.TestCase):
+#     def test_get_samples(self):
+#         KEY = range(420, 423)
+#         d = LoDoPaBFanBeamDataset(impl='skimage')
+#         for part in ['train', 'validation', 'test']:
+#             samples = [d.get_sample(i, part) for i in KEY]
+#             samples2 = d.get_samples(KEY, part)
+#             for (s_obs, s_gt), s2_obs, s2_gt in zip(samples, samples2[0],
+#                                                     samples2[1]):
+#                 self.assertTrue(np.all(np.asarray(s_obs) == s2_obs))
+#                 self.assertTrue(np.all(np.asarray(s_gt) == s2_gt))
+
+#     def test_generator(self):
+#         NUM_SAMPLES = 3
+#         d = LoDoPaBFanBeamDataset(impl='skimage')
+#         for part in ['train', 'validation', 'test']:
+#             samples = [d.get_sample(i, part) for i in range(NUM_SAMPLES)]
+#             samples2 = [s for s in islice(d.generator(part), NUM_SAMPLES)]
+#             for (s_obs, s_gt), (s2_obs, s2_gt) in zip(samples, samples2):
+#                 self.assertTrue(np.all(np.asarray(s_obs) == s2_obs))
+#                 self.assertTrue(np.all(np.asarray(s_gt) == s2_gt))
+
+# unittest.main()
