@@ -99,8 +99,11 @@ DATA_URL = 'https://github.com/jleuschn/supp.dival/raw/master/reference_params'
 def construct_reconstructor(reconstructor_key_name_or_type, dataset_name,
                             **kwargs):
     """
-    Construct reference reconstructor.
-    
+    Construct reference reconstructor object (not loading parameters).
+
+    Note: see :func:get_reference_reconstructor to retrieve a reference
+    reconstructor with optimized parameters.
+
     This function implements the constructors calls which are potentially
     specific to each configuration.
 

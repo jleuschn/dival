@@ -602,6 +602,11 @@ class ObservationGroundTruthPairDataset(Dataset):
     """
     Dataset of pairs generated from a ground truth generator by applying a
     forward operator and noise.
+
+    *NB:* This dataset class does not allow for random access. Supporting
+    random access would require to restore the same random generator state each
+    time the same sample is being accessed if a fixed noise realization should
+    be used for each sample.
     """
     def __init__(self, ground_truth_gen, forward_op, post_processor=None,
                  train_len=None, validation_len=None, test_len=None,

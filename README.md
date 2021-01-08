@@ -19,7 +19,8 @@ Currently, the following datasets are included:
     The public [LoDoPaB-CT dataset](https://doi.org/10.5281/zenodo.3384092),
     based on real CT reconstructions from the public
     [LIDC-IDRI](https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI)
-    dataset.
+    dataset. See also the ``LoDoPaBDataset`` class defined in
+    [lodopab_dataset](https://github.com/jleuschn/dival/blob/master/dival/datasets/lodopab_dataset.py).
 
 These datasets can be accessed by calling ``dival.get_standard_dataset(name)``.
 
