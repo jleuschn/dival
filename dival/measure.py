@@ -8,7 +8,11 @@ is used by the :mod:`~dival.evaluation` module.
 from abc import ABC, abstractmethod
 from warnings import warn
 import numpy as np
-from skimage.metrics import structural_similarity
+try:
+    from skimage.metrics import structural_similarity
+except ImportError:
+    # fallback for scikit-image <= 0.15.0
+    from skimage.measure import compare_ssim as structural_similarity
 from odl.operator.operator import Operator
 
 
