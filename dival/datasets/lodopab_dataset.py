@@ -89,8 +89,24 @@ class LoDoPaBDataset(Dataset):
     incident photons per pixel before attenuation is applied to the projection
     data. The images have a size of 362x362 px.
 
-    A ray transform that corresponds to the noiseless forward operator is
-    available via the `get_ray_trafo` method of this dataset.
+    An ODL ray transform that corresponds to the noiseless forward operator can
+    be obtained via the `get_ray_trafo` method of this dataset.
+    Additionally, the :attr:`ray_trafo` attribute holds a ray transform
+    instance, which is created during :meth:`__init__`.
+    *Note:* By default, the ``'astra_cuda'`` implementation backend is used,
+    which requires both astra and a CUDA-enabled GPU being available.
+    You can choose a different backend by passing ``impl='skimage'`` or
+    ``impl='astra_cpu'``.
+
+    Further functionalities:
+
+        * converting the stored post-log observations to pre-log observations
+          on the fly (cf. `observation_model` parameter of :meth:`__init__`)
+        * sorting by patient ids (cf. ``sorted_by_patient`` parameter of
+          :meth:`__init__`)
+        * changing the zero photon count replacement value of ``0.1`` used for
+          pre-log observations (cf. ``min_photon_count`` parameter of
+          :meth:`__init__`)
 
     Attributes
     ----------

@@ -174,6 +174,9 @@ class MSEMeasure(Measure):
 
 
 MSE = MSEMeasure()
+"""
+Instance of :class:`MSEMeasure`, with ``short_name='mse'``.
+"""
 
 
 class PSNRMeasure(Measure):
@@ -223,6 +226,10 @@ class PSNRMeasure(Measure):
 
 
 PSNR = PSNRMeasure()
+"""
+Instance of :class:`PSNRMeasure`, with ``data_range=None`` and
+``short_name='psnr'``.
+"""
 
 
 class SSIMMeasure(Measure):
@@ -265,3 +272,7 @@ class SSIMMeasure(Measure):
 
 
 SSIM = SSIMMeasure()
+"""
+Instance of :class:`SSIMMeasure`, with ``data_range=None`` and
+``short_name='ssim'``.
+"""
