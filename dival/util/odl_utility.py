@@ -10,6 +10,7 @@ from odl.operator.operator import Operator
 from odl.solvers.util.callback import Callback
 from odl.util import signature_string
 import numpy as np
+from skimage.transform import resize
 
 
 def uniform_discr_element(inp, space=None):
@@ -279,3 +280,14 @@ class CallbackStoreAfter(Callback):
                    ('store_after_iters', self.store_after_iters, [])]
         inner_str = signature_string([], optargs)
         return '{}({})'.format(self.__class__.__name__, inner_str)
+
+
+class ResizeOperator(Operator):
+    def __init__(self, reco_space, space, order=1):
+        self.target_shape = space.shape
+        self.order = order
+        super().__init__(reco_space, space)
+
+    def _call(self, x, out):
+        out.assign(self.range.element(
+            resize(x, self.target_shape, order=self.order)))
