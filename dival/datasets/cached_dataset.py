@@ -208,8 +208,11 @@ class CachedDataset(Dataset):
             out_dataset = tuple(
                 (out_orig if cache is None else False
                  for out_orig, cache in zip(out, self.data[part])))
-            from_dataset = self.dataset.get_sample(index, part=part,
-                                                   out=out_dataset)
+            from_dataset = (
+                self.dataset.get_sample(index, part=part, out=out_dataset)
+                if any(o_d is not False for o_d in out_dataset) else
+                (None,) * self.num_elements_per_sample)  # avoids
+                                 # NotImplementedError if all values are cached
             sample = []
             for from_d, cache, out_, space in zip(
                     from_dataset, self.data[part], out, self.space):
@@ -246,8 +249,11 @@ class CachedDataset(Dataset):
             out_dataset = tuple(
                 (out_orig if cache is None else False
                  for out_orig, cache in zip(out, self.data[part])))
-            from_dataset = self.dataset.get_samples(key, part=part,
-                                                    out=out_dataset)
+            from_dataset = (
+                self.dataset.get_samples(key, part=part, out=out_dataset)
+                if any(o_d is not False for o_d in out_dataset) else
+                (None,) * self.num_elements_per_sample)  # avoids
+                                 # NotImplementedError if all values are cached
             samples = []
             for from_d, cache, out_ in zip(from_dataset, self.data[part], out):
                 if cache is None:

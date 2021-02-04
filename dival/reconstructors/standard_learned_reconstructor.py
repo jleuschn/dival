@@ -79,7 +79,7 @@ class StandardLearnedReconstructor(LearnedReconstructor):
                  use_cuda=True, show_pbar=True, log_dir=None,
                  log_num_validation_samples=0,
                  save_best_learned_params_path=None, torch_manual_seed=1,
-                 **kwargs):
+                 shuffle='auto', worker_init_fn=None, **kwargs):
         """
         Parameters
         ----------
@@ -104,6 +104,15 @@ class StandardLearnedReconstructor(LearnedReconstructor):
             Fixed seed to set by ``torch.manual_seed`` before training.
             The default is `1`. It can be set to `None` or `False` to disable
             the manual seed.
+        shuffle : {``'auto'``, ``False``, ``True``}, optional
+            Whether to use shuffling when loading data.
+            When ``'auto'`` is specified (the default), ``True`` is used iff
+            the dataset passed to :meth:`train` supports random access.
+        worker_init_fn : callable, optional
+            Callable `worker_init_fn` passed to
+            :meth:`torch.utils.data.DataLoader.__init__`, which can be used to
+            configure the dataset copies for different worker instances
+            (cf. `torch's IterableDataset docs <https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset>`_)
         """
         super().__init__(reco_space=op.domain,
                          observation_space=op.range,
@@ -116,6 +125,8 @@ class StandardLearnedReconstructor(LearnedReconstructor):
         self.log_num_validation_samples = log_num_validation_samples
         self.save_best_learned_params_path = save_best_learned_params_path
         self.torch_manual_seed = torch_manual_seed
+        self.shuffle = shuffle
+        self.worker_init_fn = worker_init_fn
         self.model = None
         self._optimizer = None
         self._scheduler = None
@@ -158,10 +169,14 @@ class StandardLearnedReconstructor(LearnedReconstructor):
     def train(self, dataset):
         if self.torch_manual_seed:
             torch.random.manual_seed(self.torch_manual_seed)
+
+        self.init_transform(dataset=dataset)
+
         # create PyTorch datasets
         dataset_train = dataset.create_torch_dataset(
             part='train', reshape=((1,) + dataset.space[0].shape,
-                                   (1,) + dataset.space[1].shape))
+                                   (1,) + dataset.space[1].shape),
+            transform=self._transform)
 
         dataset_validation = dataset.create_torch_dataset(
             part='validation', reshape=((1,) + dataset.space[0].shape,
@@ -174,14 +189,17 @@ class StandardLearnedReconstructor(LearnedReconstructor):
         self.init_optimizer(dataset_train=dataset_train)
 
         # create PyTorch dataloaders
-        data_loaders = {'train': DataLoader(
-            dataset_train, batch_size=self.batch_size,
-            num_workers=self.num_data_loader_workers, shuffle=True,
-            pin_memory=True),
+        shuffle = (dataset.supports_random_access() if self.shuffle == 'auto'
+                   else self.shuffle)
+        data_loaders = {
+            'train': DataLoader(
+                dataset_train, batch_size=self.batch_size,
+                num_workers=self.num_data_loader_workers, shuffle=shuffle,
+                pin_memory=True, worker_init_fn=self.worker_init_fn),
             'validation': DataLoader(
                 dataset_validation, batch_size=self.batch_size,
-                num_workers=self.num_data_loader_workers,
-                shuffle=True, pin_memory=True)}
+                num_workers=self.num_data_loader_workers, shuffle=shuffle,
+                pin_memory=True, worker_init_fn=self.worker_init_fn)}
 
         dataset_sizes = {'train': len(dataset_train),
                          'validation': len(dataset_validation)}
@@ -313,18 +331,54 @@ class StandardLearnedReconstructor(LearnedReconstructor):
         print('Best val psnr: {:4f}'.format(best_psnr))
         self.model.load_state_dict(best_model_wts)
 
+    def init_transform(self, dataset):
+        """
+        Initialize the transform (:attr:`_transform`) that is applied on each
+        training sample, e.g. for data augmentation.
+        In the default implementation of :meth:`train`, it is passed to
+        :meth:`Dataset.create_torch_dataset` when creating the training (but
+        not the validation) torch dataset, which applies the transform to the
+        (tuple of) torch tensor(s) right before returning, i.e. after reshaping
+        to ``(1,) + orig_shape``.
+
+        The default implementation of this method disables the transform by
+        assigning `None`.
+        Called in :meth:`train` at the beginning, i.e. before calling
+        :meth:`init_model`, :meth:`init_optimizer` and :meth:`init_scheduler`.
+
+        Parameters
+        ----------
+        dataset : :class:`dival.datasets.dataset.Dataset`
+            The dival dataset passed to :meth:`train`.
+        """
+        self._transform = None
+
+    @property
+    def transform(self):
+        """
+        callable :
+        Transform that is applied on each sample, usually set by
+        :meth:`init_transform`, which gets called in :meth:`train`.
+        """
+        return self._transform
+
+    @transform.setter
+    def transform(self, value):
+        self._transform = value
+
     def init_model(self):
         """
         Initialize :attr:`model`.
-        Called in :meth:`train` at the beginning.
+        Called in :meth:`train` after calling :meth:`init_transform`, but
+        before calling :meth:`init_optimizer` and :meth:`init_scheduler`.
         """
         raise NotImplementedError
 
     def init_optimizer(self, dataset_train):
         """
         Initialize the optimizer.
-        Called in :meth:`train`, after calling :meth:`init_model` and before
-        calling :meth:`init_scheduler`.
+        Called in :meth:`train`, after calling :meth:`init_transform` and
+        :meth:`init_model`, but before calling :meth:`init_scheduler`.
 
         Parameters
         ----------
@@ -349,7 +403,8 @@ class StandardLearnedReconstructor(LearnedReconstructor):
     def init_scheduler(self, dataset_train):
         """
         Initialize the learning rate scheduler.
-        Called in :meth:`train`, after calling :meth:`init_optimizer`.
+        Called in :meth:`train`, after calling :meth:`init_transform`,
+        :meth:`init_model` and :meth:`init_optimizer`.
 
         Parameters
         ----------
