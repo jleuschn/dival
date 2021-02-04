@@ -7,16 +7,145 @@ except ImportError:
 else:
     TORCH_AVAILABLE = True
     from dival.util.torch_utility import (
+        RandomAccessTorchDataset, GeneratorTorchDataset,
         load_state_dict_convert_data_parallel, TOMOSIPO_AVAILABLE,
         TorchRayTrafoParallel2DModule, TorchRayTrafoParallel2DAdjointModule)
 import numpy as np
+import odl
 from dival import get_standard_dataset
+from dival.datasets import Dataset
 try:
     import astra
 except ImportError:
     ASTRA_CUDA_AVAILABLE = False
 else:
     ASTRA_CUDA_AVAILABLE = astra.use_cuda()
+
+
+@unittest.skipUnless(TORCH_AVAILABLE, 'PyTorch not available')
+class TestRandomAccessTorchDataset(unittest.TestCase):
+    def setUp(self):
+        self.TRAIN_LEN = 20
+        self.VALIDATION_LEN = 2
+        self.TEST_LEN = 2
+
+        class SequenceRandomAccessDataset2(Dataset):
+            def __init__(self, train_len=self.TRAIN_LEN,
+                         validation_len=self.VALIDATION_LEN,
+                         test_len=self.TEST_LEN):
+                self.space = (odl.uniform_discr([0, 0], [1, 1], (4, 4)),
+                              odl.uniform_discr([0, 0], [1, 1], (1, 1)))
+                self.train_len = train_len
+                self.validation_len = validation_len
+                self.test_len = test_len
+
+            def get_sample(self, index, part='train', out=None):
+                if index >= self.get_len(part):
+                    raise ValueError('index out of bound')
+                if out is None:
+                    out = (True, True)
+                out0, out1 = out
+                if isinstance(out0, bool):
+                    out0 = self.space[0].zero() if out0 else None
+                if isinstance(out[1], bool):
+                    out1 = self.space[1].zero() if out1 else None
+                if out0 is not None:
+                    out0[:] = self.space[0].one() * index
+                if out1 is not None:
+                    out1[:] = self.space[1].one() * index
+                return (out0, out1)
+
+        self.dseq2 = SequenceRandomAccessDataset2()
+
+    def test(self):
+        for part in ['train', 'validation', 'test']:
+            torch_dataset = self.dseq2.create_torch_dataset(
+                part=part, reshape=((1,) + self.dseq2.space[0].shape,
+                                    (1,) + self.dseq2.space[1].shape))
+            assert len(torch_dataset) == self.dseq2.get_len(part)
+            for (obs, gt), (obs_torch, gt_torch) in zip(
+                    self.dseq2.generator(part=part), torch_dataset):
+                assert obs_torch.shape == (1,) + self.dseq2.space[0].shape
+                assert gt_torch.shape == (1,) + self.dseq2.space[1].shape
+                assert np.all(obs_torch[0].numpy() == np.asarray(obs))
+                assert np.all(gt_torch[0].numpy() == np.asarray(gt))
+        transform = lambda x: (torch.nn.functional.pad(x[0], (2, 2)),
+                               torch.nn.functional.pad(x[1], (1, 1)))
+        for part in ['train', 'validation', 'test']:
+            torch_dataset = self.dseq2.create_torch_dataset(
+                part=part, reshape=((1,) + self.dseq2.space[0].shape,
+                                    (1,) + self.dseq2.space[1].shape),
+                transform=transform)
+            assert len(torch_dataset) == self.dseq2.get_len(part)
+            for (obs, gt), (obs_torch, gt_torch) in zip(
+                    self.dseq2.generator(part=part), torch_dataset):
+                assert obs_torch.shape == (
+                    1,
+                    self.dseq2.space[0].shape[0],
+                    self.dseq2.space[0].shape[1] + 2*2)
+                assert gt_torch.shape == (
+                    1,
+                    self.dseq2.space[1].shape[0],
+                    self.dseq2.space[1].shape[1] + 2*1)
+                assert np.all(obs_torch[0, :, 2:-2].numpy() == np.asarray(obs))
+                assert np.all(gt_torch[0, :, 1:-1].numpy() == np.asarray(gt))
+
+@unittest.skipUnless(TORCH_AVAILABLE, 'PyTorch not available')
+class TestGeneratorTorchDataset(unittest.TestCase):
+    def setUp(self):
+        self.TRAIN_LEN = 20
+        self.VALIDATION_LEN = 2
+        self.TEST_LEN = 2
+
+        class SequenceGeneratorDataset2(Dataset):
+            def __init__(self, train_len=self.TRAIN_LEN,
+                         validation_len=self.VALIDATION_LEN,
+                         test_len=self.TEST_LEN):
+                self.space = (odl.uniform_discr([0, 0], [1, 1], (3, 4)),
+                              odl.uniform_discr([0, 0], [1, 1], (2, 1)))
+                self.train_len = train_len
+                self.validation_len = validation_len
+                self.test_len = test_len
+
+            def generator(self, part='train'):
+                for i in range(self.get_len(part)):
+                    yield (self.space[0].one() * i,
+                           self.space[1].one() * i)
+
+        self.dseqgen2 = SequenceGeneratorDataset2()
+
+    def test(self):
+        for part in ['train', 'validation', 'test']:
+            torch_dataset = self.dseqgen2.create_torch_dataset(
+                part=part, reshape=((1,) + self.dseqgen2.space[0].shape,
+                                    (1,) + self.dseqgen2.space[1].shape))
+            assert len(torch_dataset) == self.dseqgen2.get_len(part)
+            for (obs, gt), (obs_torch, gt_torch) in zip(
+                    self.dseqgen2.generator(part=part), torch_dataset):
+                assert obs_torch.shape == (1,) + self.dseqgen2.space[0].shape
+                assert gt_torch.shape == (1,) + self.dseqgen2.space[1].shape
+                assert np.all(obs_torch[0].numpy() == np.asarray(obs))
+                assert np.all(gt_torch[0].numpy() == np.asarray(gt))
+        transform = lambda x: (torch.nn.functional.pad(x[0], (2, 2)),
+                               torch.nn.functional.pad(x[1], (1, 1)))
+        for part in ['train', 'validation', 'test']:
+            torch_dataset = self.dseqgen2.create_torch_dataset(
+                part=part, reshape=((1,) + self.dseqgen2.space[0].shape,
+                                    (1,) + self.dseqgen2.space[1].shape),
+                transform=transform)
+            assert len(torch_dataset) == self.dseqgen2.get_len(part)
+            for (obs, gt), (obs_torch, gt_torch) in zip(
+                    self.dseqgen2.generator(part=part), torch_dataset):
+                assert obs_torch.shape == (
+                    1,
+                    self.dseqgen2.space[0].shape[0],
+                    self.dseqgen2.space[0].shape[1] + 2*2)
+                assert gt_torch.shape == (
+                    1,
+                    self.dseqgen2.space[1].shape[0],
+                    self.dseqgen2.space[1].shape[1] + 2*1)
+                assert np.all(obs_torch[0, :, 2:-2].numpy() == np.asarray(obs))
+                assert np.all(gt_torch[0, :, 1:-1].numpy() == np.asarray(gt))
 
 @unittest.skipUnless(
     TORCH_AVAILABLE and TOMOSIPO_AVAILABLE and ASTRA_CUDA_AVAILABLE,

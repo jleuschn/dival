@@ -282,20 +282,23 @@ class Dataset():
         data_pairs = DataPairs(observations, ground_truth, name=name)
         return data_pairs
 
-    def create_torch_dataset(self, part='train', reshape=None):
+    def create_torch_dataset(self, part='train', reshape=None, transform=None):
         """
         Create a torch dataset wrapper for one part of this dataset.
 
-        If :meth:`supports_random_access` returns ``False``, samples are
-        fetched from :meth:`generator`. The index passed to
-        :meth:`~torch.utils.data.dataset.Dataset.__getitem__` of the
-        returned dataset will be ignored, and parallel data loading (with
-        multiple workers) is not applicable.
+        If :meth:`supports_random_access` returns ``False``, a subclass of
+        of :class:`torch.utils.data.IterableDataset` is returned that fetches
+        samples via :meth:`generator`.
+        *Note:* When using torch's DataLoader with multiple workers you might
+        want to individually configure the datasets for each worker, see the
+        `PyTorch docs on IterableDataset <https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset>`_.
+        For this purpose it can be useful to modify the wrapped dival dataset
+        in :func:`worker_init_fn`, which can be accessed there via
+        ``torch.utils.data.get_worker_info().dataset.dataset``.
 
-        If :meth:`supports_random_access` returns `True`, samples are looked
-        up using :meth:`get_sample`. For datasets that support parallel calls
-        to :meth:`get_sample`, the returned torch dataset can be used by
-        multiple workers.
+        If :meth:`supports_random_access` returns `True`, a subclass of
+        of :class:`torch.utils.data.Dataset` is returned that retrieves
+        samples using :meth:`get_sample`.
 
         Parameters
         ----------
@@ -304,66 +307,27 @@ class Dataset():
         reshape : tuple of (tuple or `None`), optional
             Shapes to which the elements of each sample will be reshaped.
             If `None` is passed for an element, no reshape is applied.
+        transform : callable, optional
+            Transform to be applied on each sample, useful for augmentation.
+            Default: `None`, i.e. no transform.
+
+        Returns
+        -------
+        dataset : :class:`torch.utils.data.Dataset` or \
+                :class:`torch.utils.data.IterableDataset`
+            The torch dataset wrapping this dataset.
+            The wrapped dival dataset is assigned to the attribute
+            ``dataset.dataset``.
         """
-        from torch.utils.data import Dataset as TorchDataset
-        import torch
+        from dival.util.torch_utility import (
+            RandomAccessTorchDataset, GeneratorTorchDataset)
 
         if self.supports_random_access():
-            class RandomAccessTorchDataset(TorchDataset):
-                def __init__(self, dataset, part, reshape=None):
-                    self.dataset = dataset
-                    self.part = part
-                    self.reshape = reshape or (
-                        (None,) * self.dataset.get_num_elements_per_sample())
-
-                def __len__(self):
-                    return self.dataset.get_len(self.part)
-
-                def __getitem__(self, idx):
-                    arrays = self.dataset.get_sample(idx, part=self.part)
-                    mult_elem = isinstance(arrays, tuple)
-                    if not mult_elem:
-                        arrays = (arrays,)
-                    tensors = []
-                    for arr, s in zip(arrays, self.reshape):
-                        t = torch.from_numpy(np.asarray(arr))
-                        if s is not None:
-                            t = t.view(*s)
-                        tensors.append(t)
-                    return tuple(tensors) if mult_elem else tensors[0]
-
-            dataset = RandomAccessTorchDataset(self, part, reshape=reshape)
+            dataset = RandomAccessTorchDataset(self, part, reshape=reshape,
+                                               transform=transform)
         else:
-            class GeneratorTorchDataset(TorchDataset):
-                def __init__(self, dataset, part, reshape=None):
-                    self.part = part
-                    self.dataset = dataset
-                    self.generator = self.dataset.generator(self.part)
-                    self.length = self.dataset.get_len(self.part)
-                    self.reshape = reshape or (
-                        (None,) * dataset.get_num_elements_per_sample())
-
-                def __len__(self):
-                    return self.length
-
-                def __getitem__(self, idx):
-                    try:
-                        arrays = next(self.generator)
-                    except StopIteration:
-                        self.generator = self.dataset.generator(self.part)
-                        arrays = next(self.generator)
-                    mult_elem = isinstance(arrays, tuple)
-                    if not mult_elem:
-                        arrays = (arrays,)
-                    tensors = []
-                    for arr, s in zip(arrays, self.reshape):
-                        t = torch.from_numpy(np.asarray(arr))
-                        if s is not None:
-                            t = t.view(*s)
-                        tensors.append(t)
-                    return tuple(tensors) if mult_elem else tensors[0]
-
-            dataset = GeneratorTorchDataset(self, part, reshape=reshape)
+            dataset = GeneratorTorchDataset(self, part, reshape=reshape,
+                                            transform=transform)
 
         return dataset
 

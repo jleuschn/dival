@@ -14,6 +14,7 @@ astra features available in version 1.9.9.dev4 using CUDA.
 In order to instantiate or call these classes and functions, all of these
 requirements need to be fulfilled, otherwise an :class:`ImportError` is raised.
 """
+import numpy as np
 import torch
 try:
     import tomosipo as ts
@@ -35,6 +36,67 @@ except ImportError:
     ASTRA_AVAILABLE = False
 else:
     ASTRA_AVAILABLE = True
+
+
+class RandomAccessTorchDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset, part, reshape=None,
+                 transform=None):
+        self.dataset = dataset
+        self.part = part
+        self.reshape = reshape or (
+            (None,) * self.dataset.get_num_elements_per_sample())
+        self.transform = transform
+
+    def __len__(self):
+        return self.dataset.get_len(self.part)
+
+    def __getitem__(self, idx):
+        arrays = self.dataset.get_sample(idx, part=self.part)
+        mult_elem = isinstance(arrays, tuple)
+        if not mult_elem:
+            arrays = (arrays,)
+        tensors = []
+        for arr, s in zip(arrays, self.reshape):
+            t = torch.from_numpy(np.asarray(arr))
+            if s is not None:
+                t = t.view(*s)
+            tensors.append(t)
+        sample = tuple(tensors) if mult_elem else tensors[0]
+        if self.transform is not None:
+            sample = self.transform(sample)
+        return sample
+
+class GeneratorTorchDataset(torch.utils.data.IterableDataset):
+    def __init__(self, dataset, part, reshape=None,
+                 transform=None):
+        self.part = part
+        self.dataset = dataset
+        self.reshape = reshape or (
+            (None,) * dataset.get_num_elements_per_sample())
+        self.transform = transform
+
+    def __len__(self):
+        return self.dataset.get_len(self.part)
+
+    def __iter__(self):
+        return self.generate()
+
+    def generate(self):
+        for arrays in self.dataset.generator(self.part):
+            mult_elem = isinstance(arrays, tuple)
+            if not mult_elem:
+                arrays = (arrays,)
+            tensors = []
+            for arr, s in zip(arrays, self.reshape):
+                t = torch.from_numpy(np.asarray(arr))
+                if s is not None:
+                    t = t.view(*s)
+                tensors.append(t)
+            sample = tuple(tensors) if mult_elem else tensors[0]
+            if self.transform is not None:
+                sample = self.transform(sample)
+            yield sample
+
 
 class TorchRayTrafoParallel2DModule(torch.nn.Module):
     """

@@ -2,12 +2,13 @@
 """Provides standard datasets for benchmarking.
 """
 from warnings import warn
+from functools import partial
 import numpy as np
-from skimage.transform import resize
 import odl
 from dival.datasets.ellipses_dataset import EllipsesDataset
 from dival.datasets.lodopab_dataset import LoDoPaBDataset
 from dival.datasets.angle_subset_dataset import get_angle_subset_dataset
+from dival.util.odl_utility import ResizeOperator
 
 
 STANDARD_DATASET_NAMES = ['ellipses', 'lodopab']
@@ -78,9 +79,16 @@ def get_standard_dataset(name, **kwargs):
                 impl : {``'skimage'``, ``'astra_cpu'``, ``'astra_cuda'``},\
                         optional
                     Implementation passed to :class:`odl.tomo.RayTransform`
+                    Default: ``'astra_cuda'``.
                 fixed_seeds : dict or bool, optional
                     Seeds to use for random ellipse generation, passed to
-                    :class:`.EllipsesDataset`.
+                    :meth:`.EllipsesDataset.__init__`.
+                    Default: ``False``.
+                fixed_noise_seeds : dict or bool, optional
+                    Seeds to use for noise generation, passed as `noise_seeds`
+                    to :meth:`.GroundTruthDataset.create_pair_dataset`.
+                    If ``True`` is passed (the default), the seeds
+                    ``{'train': 1, 'validation': 2, 'test': 3}`` are used.
             ``'lodopab'``
                 num_angles : int, optional
                     Number of angles to use from the full 1000 angles.
@@ -100,6 +108,7 @@ def get_standard_dataset(name, **kwargs):
                 impl : {``'skimage'``, ``'astra_cpu'``, ``'astra_cuda'``},\
                         optional
                     Implementation passed to :class:`odl.tomo.RayTransform`
+                    Default: ``'astra_cuda'``.
 
     Returns
     -------
@@ -131,28 +140,26 @@ def get_standard_dataset(name, **kwargs):
         impl = kwargs.pop('impl', 'astra_cuda')
         ray_trafo = odl.tomo.RayTransform(space, geometry, impl=impl)
 
-        def get_reco_ray_trafo(**kwargs):
-            return odl.tomo.RayTransform(reco_space, reco_geometry, **kwargs)
-        reco_ray_trafo = get_reco_ray_trafo(impl=impl)
-
-        class _ResizeOperator(odl.Operator):
-            def __init__(self):
-                super().__init__(reco_space, space)
-
-            def _call(self, x, out):
-                out.assign(space.element(resize(x, IM_SHAPE, order=1)))
+        reco_ray_trafo = odl.tomo.RayTransform(reco_space, reco_geometry,
+                                               impl=impl)
 
         # forward operator
-        resize_op = _ResizeOperator()
+        resize_op = ResizeOperator(reco_space, space)
         forward_op = ray_trafo * resize_op
+
+        noise_seeds = kwargs.pop('fixed_noise_seeds', True)
+        if isinstance(noise_seeds, bool):
+            noise_seeds = ({'train': 1, 'validation': 2, 'test': 3}
+                           if noise_seeds else None)
 
         dataset = ellipses_dataset.create_pair_dataset(
             forward_op=forward_op, noise_type='white',
             noise_kwargs={'relative_stddev': True,
                           'stddev': 0.025},
-            noise_seeds={'train': 1, 'validation': 2, 'test': 3})
+            noise_seeds=noise_seeds)
 
-        dataset.get_ray_trafo = get_reco_ray_trafo
+        dataset.get_ray_trafo = partial(odl.tomo.RayTransform,
+                                        reco_space, reco_geometry)
         dataset.ray_trafo = reco_ray_trafo
 
     elif name == 'lodopab':

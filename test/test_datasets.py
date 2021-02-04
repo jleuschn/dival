@@ -12,66 +12,47 @@ from dival.datasets.angle_subset_dataset import AngleSubsetDataset
 
 
 class TestDataset(unittest.TestCase):
-    def test(self):
-        TRAIN_LEN = 10
-        VALIDATION_LEN = 1
-        TEST_LEN = 1
+    def setUp(self):
+        self.TRAIN_LEN = 20
+        self.VALIDATION_LEN = 2
+        self.TEST_LEN = 2
 
-        class DummyDataset(Dataset):
-            def __init__(self):
+        class SequenceGeneratorDataset(Dataset):
+            def __init__(self, train_len=self.TRAIN_LEN,
+                         validation_len=self.VALIDATION_LEN,
+                         test_len=self.TEST_LEN):
                 self.space = odl.uniform_discr([0, 0], [1, 1], (1, 1))
-                self.train_len = TRAIN_LEN
-                self.validation_len = VALIDATION_LEN
-                self.test_len = TEST_LEN
+                self.train_len = train_len
+                self.validation_len = validation_len
+                self.test_len = test_len
 
             def generator(self, part='train'):
                 for i in range(self.get_len(part)):
                     yield self.space.element(i)
 
-        d = DummyDataset()
-        self.assertEqual(d.get_len('train'), TRAIN_LEN)
-        self.assertEqual(d.get_len('validation'), VALIDATION_LEN)
-        self.assertEqual(d.get_len('test'), TEST_LEN)
-        for part in ['train', 'validation', 'test']:
-            for i, s in zip(range(d.get_len(part)), d.generator(part)):
-                self.assertEqual(s, d.space.element(i))
+        class SequenceGeneratorDataset2(Dataset):
+            def __init__(self, train_len=self.TRAIN_LEN,
+                         validation_len=self.VALIDATION_LEN,
+                         test_len=self.TEST_LEN):
+                self.space = (odl.uniform_discr([0, 0], [1, 1], (3, 4)),
+                              odl.uniform_discr([0, 0], [1, 1], (2, 1)))
+                self.train_len = train_len
+                self.validation_len = validation_len
+                self.test_len = test_len
 
-    def test_generator(self):
-        TRAIN_LEN = 10
-        VALIDATION_LEN = 1
-        TEST_LEN = 1
+            def generator(self, part='train'):
+                for i in range(self.get_len(part)):
+                    yield (self.space[0].one() * i,
+                           self.space[1].one() * i)
 
-        class DummyDataset(Dataset):
-            def __init__(self):
+        class SequenceRandomAccessDataset(Dataset):
+            def __init__(self, train_len=self.TRAIN_LEN,
+                         validation_len=self.VALIDATION_LEN,
+                         test_len=self.TEST_LEN):
                 self.space = odl.uniform_discr([0, 0], [1, 1], (1, 1))
-                self.train_len = TRAIN_LEN
-                self.validation_len = VALIDATION_LEN
-                self.test_len = TEST_LEN
-
-            def get_sample(self, index, part='train', out=None):
-                if out is None:
-                    out = True
-                if isinstance(out, bool):
-                    out = self.space.zero() if out else None
-                if out is not None:
-                    out[:] = index
-                return out
-
-        d = DummyDataset()
-        self.assertEqual(d.get_len('train'), TRAIN_LEN)
-        self.assertEqual(d.get_len('validation'), VALIDATION_LEN)
-        self.assertEqual(d.get_len('test'), TEST_LEN)
-        for part in ['train', 'validation', 'test']:
-            for i, s in zip(range(d.get_len(part)), d.generator(part)):
-                self.assertEqual(s, d.space.element(i))
-
-    def test_get_samples(self):
-        class DummyDataset(Dataset):
-            def __init__(self):
-                self.space = odl.uniform_discr([0, 0], [1, 1], (1, 1))
-                self.train_len = 20
-                self.validation_len = 2
-                self.test_len = 2
+                self.train_len = train_len
+                self.validation_len = validation_len
+                self.test_len = test_len
 
             def get_sample(self, index, part='train', out=None):
                 if index >= self.get_len(part):
@@ -84,23 +65,15 @@ class TestDataset(unittest.TestCase):
                     out[:] = index
                 return out
 
-        d = DummyDataset()
-        for part in ['train', 'validation', 'test']:
-            samples = d.get_samples(range(d.get_len(part)), part=part)
-            self.assertEqual(type(samples), np.ndarray)
-            self.assertEqual(samples[0].shape, d.space.shape)
-            self.assertEqual(samples.dtype, d.space.dtype)
-            self.assertEqual(len(samples), d.get_len(part))
-            for i, s in enumerate(samples):
-                self.assertEqual(s, d.space.element(i))
-
-        class DummyDataset2(Dataset):
-            def __init__(self):
+        class SequenceRandomAccessDataset2(Dataset):
+            def __init__(self, train_len=self.TRAIN_LEN,
+                         validation_len=self.VALIDATION_LEN,
+                         test_len=self.TEST_LEN):
                 self.space = (odl.uniform_discr([0, 0], [1, 1], (4, 4)),
                               odl.uniform_discr([0, 0], [1, 1], (1, 1)))
-                self.train_len = 20
-                self.validation_len = 2
-                self.test_len = 2
+                self.train_len = train_len
+                self.validation_len = validation_len
+                self.test_len = test_len
 
             def get_sample(self, index, part='train', out=None):
                 if index >= self.get_len(part):
@@ -118,18 +91,51 @@ class TestDataset(unittest.TestCase):
                     out1[:] = self.space[1].one() * index
                 return (out0, out1)
 
-        d2 = DummyDataset2()
+        self.dseqgen1 = SequenceGeneratorDataset()
+        self.dseqgen2 = SequenceGeneratorDataset2()
+        self.dseq1 = SequenceRandomAccessDataset()
+        self.dseq2 = SequenceRandomAccessDataset2()
+
+    def test(self):
+        self.assertEqual(
+            self.dseqgen1.get_len('train'), self.TRAIN_LEN)
+        self.assertEqual(
+            self.dseqgen1.get_len('validation'), self.VALIDATION_LEN)
+        self.assertEqual(
+            self.dseqgen1.get_len('test'), self.TEST_LEN)
+        for part in ['train', 'validation', 'test']:
+            for i, s in enumerate(self.dseqgen1.generator(part)):
+                self.assertEqual(s, self.dseqgen1.space.element(i))
+
+    def test_generator(self):
+        for part in ['train', 'validation', 'test']:
+            for i, s in enumerate(self.dseq1.generator(part)):
+                self.assertEqual(s, self.dseq1.space.element(i))
+                self.assertEqual(s, self.dseq1.get_sample(i))
+
+    def test_get_samples(self):
+        for part in ['train', 'validation', 'test']:
+            samples = self.dseq1.get_samples(
+                range(self.dseq1.get_len(part)), part=part)
+            self.assertEqual(type(samples), np.ndarray)
+            self.assertEqual(samples[0].shape, self.dseq1.space.shape)
+            self.assertEqual(samples.dtype, self.dseq1.space.dtype)
+            self.assertEqual(len(samples), self.dseq1.get_len(part))
+            for i, s in enumerate(samples):
+                self.assertEqual(s, self.dseq1.space.element(i))
+                self.assertEqual(s, self.dseq1.get_sample(i))
+
         for part in ['train', 'validation', 'test']:
             STEP = 2
-            samples = d2.get_samples(slice(None, d2.get_len(part), STEP),
-                                     part=part)
+            samples = self.dseq2.get_samples(
+                slice(None, self.dseq2.get_len(part), STEP), part=part)
             self.assertEqual(type(samples), tuple)
-            for s, space in zip(samples, d2.space):
+            for s, space in zip(samples, self.dseq2.space):
                 self.assertEqual(type(s), np.ndarray)
                 self.assertEqual(s[0].shape, space.shape)
                 self.assertEqual(s.dtype, space.dtype)
-                self.assertEqual(len(s), d2.get_len(part) // STEP)
-                for i, s_ in zip(range(0, d2.get_len(part), STEP), s):
+                self.assertEqual(len(s), self.dseq2.get_len(part) // STEP)
+                for i, s_ in zip(range(0, self.dseq2.get_len(part), STEP), s):
                     self.assertTrue(np.all(np.equal(s_, space.one() * i)))
 
     def test_getters(self):
@@ -222,92 +228,54 @@ class TestDataset(unittest.TestCase):
         self.assertEqual(d2.supports_random_access(), True)
 
     def test_get_data_pairs(self):
-        class DummyDataset(Dataset):
-            def __init__(self):
-                self.train_len = 100
-                self.validation_len = 10
-                self.test_len = 10
-                self.num_samples_per_element = 2
-                space = odl.uniform_discr([0, 0], [1, 1], (1, 1))
-                self.space = (space, space)
-
-            def generator(self, part='train'):
-                for i in range(self.get_len(part)):
-                    yield (self.space[0].element(i), self.space[1].element(i))
-
-        d = DummyDataset()
         PART = 'train'
         N = 10
-        data_pairs = d.get_data_pairs(PART, n=N)
-        gen = d.generator(part=PART)
+        data_pairs = self.dseqgen2.get_data_pairs(PART, n=N)
+        gen = self.dseqgen2.generator(part=PART)
         for (obs2, gt2), (obs, gt) in zip(data_pairs, gen):
             self.assertEqual(obs2, obs)
             self.assertEqual(gt2, gt)
 
-        data_pairs2 = d.get_data_pairs_per_index(PART, index=list(range(N)))
-        gen = d.generator(part=PART)
+        data_pairs2 = self.dseqgen2.get_data_pairs_per_index(
+            PART, index=list(range(N)))
+        gen = self.dseqgen2.generator(part=PART)
         for (obs2, gt2), (obs, gt) in zip(data_pairs2, gen):
             self.assertEqual(obs2, obs)
             self.assertEqual(gt2, gt)
 
         INDEX = [4, 3, 3, 5]
-        data_pairs2 = d.get_data_pairs_per_index(PART, index=INDEX)
-        data_pairs_all = d.get_data_pairs(PART, n=max(INDEX)+1)
+        data_pairs2 = self.dseqgen2.get_data_pairs_per_index(PART, index=INDEX)
+        data_pairs_all = self.dseqgen2.get_data_pairs(PART, n=max(INDEX)+1)
         for j, i in enumerate(INDEX):
             obs2, gt2 = data_pairs2[j]
             obs, gt = data_pairs_all[i]
             self.assertEqual(obs2, obs)
             self.assertEqual(gt2, gt)
 
-        class DummyDataset2(Dataset):
-            def __init__(self):
-                self.train_len = 100
-                self.validation_len = 10
-                self.test_len = 10
-                self.num_samples_per_element = 2
-                self.random_access = True
-                space = odl.uniform_discr([0, 0], [1, 1], (1, 1))
-                self.space = (space, space)
-
-            def get_sample(self, index, part='train', out=None):
-                if index >= self.get_len(part):
-                    raise ValueError('index out of bound')
-                if out is None:
-                    out = (True, True)
-                out0, out1 = out
-                if isinstance(out0, bool):
-                    out0 = self.space[0].zero() if out0 else None
-                if isinstance(out[1], bool):
-                    out1 = self.space[1].zero() if out1 else None
-                if out0 is not None:
-                    out0[:] = self.space[0].one() * index
-                if out1 is not None:
-                    out1[:] = self.space[1].one() * index
-                return (out0, out1)
-
-        d = DummyDataset2()
         PART = 'train'
         N = 10
-        data_pairs = d.get_data_pairs(PART, n=N)
-        gen = d.generator(part=PART)
+        data_pairs = self.dseq2.get_data_pairs(PART, n=N)
+        gen = self.dseq2.generator(part=PART)
         for (obs2, gt2), (obs, gt) in zip(data_pairs, gen):
             self.assertEqual(obs2, obs)
             self.assertEqual(gt2, gt)
 
-        data_pairs2 = d.get_data_pairs_per_index(PART, index=list(range(N)))
-        gen = d.generator(part=PART)
+        data_pairs2 = self.dseq2.get_data_pairs_per_index(
+            PART, index=list(range(N)))
+        gen = self.dseq2.generator(part=PART)
         for (obs2, gt2), (obs, gt) in zip(data_pairs2, gen):
             self.assertEqual(obs2, obs)
             self.assertEqual(gt2, gt)
 
         INDEX = [4, 3, 3, 5]
-        data_pairs2 = d.get_data_pairs_per_index(PART, index=INDEX)
-        data_pairs_all = d.get_data_pairs(PART, n=max(INDEX)+1)
+        data_pairs2 = self.dseq2.get_data_pairs_per_index(PART, index=INDEX)
+        data_pairs_all = self.dseq2.get_data_pairs(PART, n=max(INDEX)+1)
         for j, i in enumerate(INDEX):
             obs2, gt2 = data_pairs2[j]
             obs, gt = data_pairs_all[i]
             self.assertEqual(obs2, obs)
             self.assertEqual(gt2, gt)
+
 
 class TestLoDoPaBDataset(unittest.TestCase):
     def test_patient_ids(self):

@@ -71,35 +71,50 @@ class FBPUNetReconstructor(StandardLearnedReconstructor):
         }
     })
 
-    def __init__(self, ray_trafo, **kwargs):
+    def __init__(self, ray_trafo,
+                 allow_multiple_workers_without_random_access=False,
+                 **kwargs):
         """
         Parameters
         ----------
         ray_trafo : :class:`odl.tomo.RayTransform`
             Ray transform (the forward operator).
+        allow_multiple_workers_without_random_access : bool, optional
+            Whether for datasets without support for random access
+            a specification of ``num_data_loader_workers > 1`` is honored.
+            If `False` (the default), the value is overridden by ``1`` for
+            generator-only datasets.
 
         Further keyword arguments are passed to ``super().__init__()``.
         """
+        self.allow_multiple_workers_without_random_access = (
+            allow_multiple_workers_without_random_access)
         super().__init__(ray_trafo, **kwargs)
 
     def train(self, dataset):
         try:
             fbp_dataset = dataset.fbp_dataset
         except AttributeError:
-            warn('Training FBPUNetReconstructor with no cached FBP dataset.'
+            warn('Training FBPUNetReconstructor with no cached FBP dataset. '
                  'Will compute the FBPs on the fly. For faster training, '
                  'consider precomputing the FBPs with '
-                 '`generate_fbp_cache_files(...)` and pass them to `train()` '
-                 'by setting the attribute '
+                 '`generate_fbp_cache_files(...)` and passing them to '
+                 '`train()` by setting the attribute '
                  '``dataset.fbp_dataset = get_cached_fbp_dataset(...)``.')
             fbp_dataset = FBPDataset(
                 dataset, self.non_normed_op, filter_type=self.filter_type,
                 frequency_scaling=self.frequency_scaling)
 
         if not fbp_dataset.supports_random_access():
-            warn('Dataset does not support random access. Shuffling will not '
-                 'work, and only 1 worker will be used for data loading.')
-            self.num_data_loader_workers = 1
+            if not self.allow_multiple_workers_without_random_access:
+                if self.num_data_loader_workers > 1:
+                    warn('Overriding number of workers with 1 for a dataset '
+                         'not supporting random access. To force a higher '
+                         'number of workers, specify '
+                         '`allow_multiple_workers_without_random_access=True` '
+                         'to `FBPUNetReconstructor.__init__()`.')
+                self.num_data_loader_workers = min(
+                    self.num_data_loader_workers, 1)
 
         super().train(fbp_dataset)
 

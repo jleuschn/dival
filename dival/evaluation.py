@@ -274,7 +274,8 @@ class TaskTable:
                                     row['measure_values'])
                                 if return_rows_iterates is not None:
                                     for row_iterates, iterations in zip(
-                                            rows_iterates, return_rows_iterates):
+                                            rows_iterates,
+                                            return_rows_iterates):
                                         best_loss = save_if_best_reconstructor(
                                             row_iterates['measure_values'],
                                             iterations=iterations)
@@ -319,7 +320,7 @@ class TaskTable:
         # row [, rows_iterates] : dict or (dict, list of dict)
         #     The resulting row, and if `return_rows_iterates` is specified,
         #     as second output a list of rows for the iterates.
-        reconstructions = []
+        reconstructions = [] if save_reconstructions else None
         if isinstance(reconstructor, IterativeReconstructor):
             if save_iterates:
                 iterates = []
@@ -328,6 +329,8 @@ class TaskTable:
             save_iterates_step = options.get('save_iterates_step', 1)
             if return_rows_iterates is not None:
                 iterates_for_rows = []
+
+        measure_values = {m.short_name: [] for m in measures}
 
         for observation, ground_truth in zip(test_data.observations,
                                              test_data.ground_truth):
@@ -375,13 +378,13 @@ class TaskTable:
             else:
                 reconstruction = reconstructor.reconstruct(observation)
 
-            reconstructions.append(reconstruction)
+            for measure in measures:
+                measure_values[measure.short_name].append(
+                    measure.apply(reconstruction, ground_truth))
 
-        measure_values = {}
-        for measure in measures:
-            measure_values[measure.short_name] = [
-                measure.apply(r, g) for r, g in zip(
-                    reconstructions, test_data.ground_truth)]
+            if save_reconstructions:
+                reconstructions.append(reconstruction)
+
         misc = {}
         if isinstance(reconstructor, IterativeReconstructor):
             if save_iterates:
@@ -396,8 +399,6 @@ class TaskTable:
                'test_data': test_data,
                'measure_values': measure_values,
                'misc': misc}
-        if save_reconstructions:
-            row['reconstructions'] = reconstructions
         if return_rows_iterates is not None:
             # create rows for iterates given by return_rows_iterates
             rows_iterates = []
@@ -432,6 +433,8 @@ class TaskTable:
                                 'test_data': test_data,
                                 'measure_values': measure_values_iterates,
                                 'misc': misc_iterates}
+                if not save_reconstructions:
+                    row_iterates['reconstructions'] = None
                 rows_iterates.append(row_iterates)
         return row if return_rows_iterates is None else (row, rows_iterates)
 
