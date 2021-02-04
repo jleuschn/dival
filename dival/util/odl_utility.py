@@ -291,3 +291,71 @@ class ResizeOperator(Operator):
     def _call(self, x, out):
         out.assign(self.range.element(
             resize(x, self.target_shape, order=self.order)))
+
+
+class RayBackProjection(Operator):
+    """Adjoint of the discrete Ray transform between L^p spaces.
+
+    This class is copied and modified from
+    `odl <https://github.com/odlgroup/odl/blob/25ec783954a85c2294ad5b76414f8c7c3cd2785d/odl/tomo/operators/ray_trafo.py#L324>`_.
+
+    This main-scope class definition is used by
+    :func:`patch_ray_trafo_for_pickling` to make a ray transform object
+    pickleable by replacing its :attr:`_adjoint` attribute with an instance of
+    this class.
+    """
+    def __init__(self, ray_trafo, **kwargs):
+        self.ray_trafo = ray_trafo
+        super().__init__(**kwargs)
+
+    def _call(self, x, out=None, **kwargs):
+        """Backprojection.
+
+        Parameters
+        ----------
+        x : DiscretizedSpaceElement
+            A sinogram. Must be an element of
+            `RayTransform.range` (domain of `RayBackProjection`).
+        out : `RayBackProjection.domain` element, optional
+            A volume to which the result of this evaluation is
+            written.
+        **kwargs
+            Extra keyword arguments, passed on to the
+            implementation backend.
+
+        Returns
+        -------
+        DiscretizedSpaceElement
+            Result of the transform in the domain
+            of `RayProjection`.
+        """
+        return self.ray_trafo.get_impl(
+            self.ray_trafo.use_cache
+        ).call_backward(x, out, **kwargs)
+
+    @property
+    def geometry(self):
+        return self.ray_trafo.geometry
+
+    @property
+    def adjoint(self):
+        return self.ray_trafo
+
+
+def patch_ray_trafo_for_pickling(ray_trafo):
+    """
+    Make an object of type :class:`odl.tomo.operators.RayTransform` pickleable
+    by overwriting the :attr:`_adjoint` (which originally has a local class
+    type) with a :class:`dival.util.torch_utility.RayBackProjection` object.
+    This can be required for multiprocessing.
+
+    Parameters
+    ----------
+    ray_trafo : :class:`odl.tomo.operators.RayTransform`
+        The ray transform to patch for pickling.
+    """
+    kwargs = ray_trafo._extra_kwargs.copy()
+    kwargs['domain'] = ray_trafo.range
+    ray_trafo._adjoint = RayBackProjection(
+        ray_trafo, range=ray_trafo.domain, linear=True, **kwargs
+    )

@@ -12,7 +12,7 @@ from dival.reconstructors.fbpunet_reconstructor import FBPUNetReconstructor
 from dival.reference_reconstructors import (
     check_for_params, download_params, get_hyper_params_path)
 from dival.util.plot import plot_images
-from dival.util.torch_utility import patch_ray_trafo_for_pickling
+from dival.util.odl_utility import patch_ray_trafo_for_pickling
 
 IMPL = 'astra_cuda'
 
