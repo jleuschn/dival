@@ -7,12 +7,12 @@ from dival.util.constants import MU_MAX
 
 def tv_loss(x):
     """
-    Isotropic TV loss similar to the one in [1]_.
+    Anisotropic TV loss similar to the one in [1]_.
 
     Parameters
     ----------
     x : :class:`torch.Tensor`
-        Tensor of which to compute the isotropic TV w.r.t. its last two axes.
+        Tensor of which to compute the anisotropic TV w.r.t. its last two axes.
 
     References
     ----------
@@ -36,6 +36,8 @@ def poisson_loss(y_pred, y_true, photons_per_pixel=4096, mu_max=MU_MAX):
     ----------
     y_pred : :class:`torch.Tensor`
         Predicted observation (post-log, normalized by `mu_max`).
+        Each entry specifies the mean of a Poisson distribution, with respect
+        to which the likelihood of the observation ``y_true`` is considered.
     y_true : :class:`torch.Tensor`
         True observation (post-log, normalized by `mu_max`).
     photons_per_pixel : int or float, optional
