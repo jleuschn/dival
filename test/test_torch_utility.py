@@ -206,9 +206,6 @@ class TestTorchRayTrafoParallel2DModule(unittest.TestCase):
             torch_out.backward(out_grad, retain_graph=True)
             scalar_prod_range = torch.sum(torch_out * out_grad).item()
             scalar_prod_domain = torch.sum(torch_in * torch_in.grad).item()
-            print(
-                scalar_prod_range,
-                scalar_prod_domain)
             self.assertAlmostEqual(
                 scalar_prod_range,
                 scalar_prod_domain,
