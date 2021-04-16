@@ -2,8 +2,9 @@
 """Provides `LoDoPaBDataset`.
 
 Provides simple access to the `LoDoPaB-CT dataset
-<https://zenodo.org/record/3384092>`_ documented in an `ArXiv preprint
-<https://arxiv.org/abs/1910.01113>`_.
+<https://zenodo.org/record/3384092>`_ documented in a
+`Data Descriptor article
+<https://www.nature.com/articles/s41597-021-00893-z>`_.
 """
 import os
 from warnings import warn
@@ -76,8 +77,8 @@ def download_lodopab():
 
 class LoDoPaBDataset(Dataset):
     """
-    The LoDoPaB-CT dataset, which is documented in the preprint
-    `<https://arxiv.org/abs/1910.01113>`_ hosted on
+    The LoDoPaB-CT dataset, which is documented in the Data Descriptor article
+    `<https://www.nature.com/articles/s41597-021-00893-z>`_ and hosted on
     `<https://zenodo.org/record/3384092>`_.
     It is a simulated low dose CT dataset based on real reconstructions from
     the `LIDC-IDRI
