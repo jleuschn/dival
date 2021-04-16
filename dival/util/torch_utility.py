@@ -136,12 +136,13 @@ class TorchRayTrafoParallel2DModule(torch.nn.Module):
         self._z_shape = z_shape
 
     def forward(self, x):
-        z_shape = x.shape[0] * x.shape[1]
+        shape_orig = x.shape
+        z_shape = shape_orig[0] * shape_orig[1]
         if self._z_shape != z_shape:
             self._construct_operator(z_shape)
         x = x.view(1, z_shape, *x.shape[2:])
         x = self.torch_ray_trafo(x)
-        x = x.view(z_shape, 1, *x.shape[2:])
+        x = x.view(*shape_orig[:2], *x.shape[2:])
         return x
 
 class TorchRayTrafoParallel2DAdjointModule(torch.nn.Module):
@@ -183,12 +184,13 @@ class TorchRayTrafoParallel2DAdjointModule(torch.nn.Module):
         self._z_shape = z_shape
 
     def forward(self, x):
-        z_shape = x.shape[0] * x.shape[1]
+        shape_orig = x.shape
+        z_shape = shape_orig[0] * shape_orig[1]
         if self._z_shape != z_shape:
             self._construct_operator(z_shape)
         x = x.view(1, z_shape, *x.shape[2:])
         x = self.torch_ray_trafo_adjoint(x)
-        x = x.view(z_shape, 1, *x.shape[2:])
+        x = x.view(*shape_orig[:2], *x.shape[2:])
         return x
 
 def get_torch_ray_trafo_parallel_2d(ray_trafo, z_shape=1):

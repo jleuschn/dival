@@ -429,7 +429,8 @@ plt.show()
 # Below is unfinished code for a parallelized simulation, which could be very
 # beneficial if the RayTransform backend IMPL='astra_cpu' is chosen above.
 # Similar code was used for simulating the standard parallel beam observations.
-# See footnote 8 in https://arxiv.org/pdf/1910.01113.pdf for a reason why
+# See Remark in section "Projection data generation" in
+# https://www.nature.com/articles/s41597-021-00893-z for a reason why
 # 'astra_cpu' was chosen there.
 # The following pickle error occurs:
 #     AttributeError: Can't pickle local object

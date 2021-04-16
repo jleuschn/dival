@@ -43,9 +43,9 @@ def get_standard_dataset(name, **kwargs):
                     are forwarded to the :class:`RayTransform` constructor.
 
         ``'lodopab'``
-            The LoDoPaB-CT dataset, which is documented in the
-            preprint `<https://arxiv.org/abs/1910.01113>`_ hosted on
-            `<https://zenodo.org/record/3384092>`_.
+            The LoDoPaB-CT dataset, which is documented in the Data Descriptor
+            article `<https://www.nature.com/articles/s41597-021-00893-z>`_ and
+            hosted on `<https://zenodo.org/record/3384092>`_.
             It is a simulated low dose CT dataset based on real reconstructions
             from the `LIDC-IDRI
             <https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI>`_

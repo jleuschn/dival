@@ -25,11 +25,11 @@ class IRadonMapReconstructor(StandardLearnedReconstructor):
 
     References
     ----------
-    .. [1] J. He and J. Ma, 2018,
+    .. [1] J. He and J. Ma, 2020,
            "Radon Inversion via Deep Learning".
-           arXiv preprint.
-           `arXiv:1808.03015v1
-           <https://arxiv.org/abs/1808.03015>`_
+           IEEE Transactions on Medical Imaging, vol. 39, no. 6, pp. 2076-2087
+           `doi:10.1109/TMI.2020.2964266
+           <https://doi.org/10.1109/TMI.2020.2964266>`_
     .. [2] B. Zhu, J. Z. Liu, S. F. Cauly et al., 2018,
            "Image Reconstruction by Domain-Transform Manifold Learning".
            Nature 555, 487--492.

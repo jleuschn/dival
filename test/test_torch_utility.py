@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import unittest
+from functools import partial
 try:
     import torch
 except ImportError:
@@ -14,6 +15,7 @@ import numpy as np
 import odl
 from dival import get_standard_dataset
 from dival.datasets import Dataset
+from dival.datasets.ellipses_dataset import EllipsesDataset
 try:
     import astra
 except ImportError:
@@ -21,6 +23,26 @@ except ImportError:
 else:
     ASTRA_CUDA_AVAILABLE = astra.use_cuda()
 
+
+def get_parallel_beam_dataset():
+    ellipses_dataset = EllipsesDataset(
+        image_size=128, min_pt=[-20., -20.], max_pt=[20., 20.],
+        fixed_seeds=True)
+
+    NUM_ANGLES = 30
+
+    geometry = odl.tomo.parallel_beam_geometry(
+        ellipses_dataset.space, num_angles=NUM_ANGLES)
+
+    ray_trafo = odl.tomo.RayTransform(ellipses_dataset.space,
+                                      geometry, impl='astra_cuda')
+
+    dataset = ellipses_dataset.create_pair_dataset(forward_op=ray_trafo)
+
+    dataset.get_ray_trafo = partial(odl.tomo.RayTransform,
+                                    ellipses_dataset.space, geometry)
+    dataset.ray_trafo = ray_trafo
+    return dataset
 
 @unittest.skipUnless(TORCH_AVAILABLE, 'PyTorch not available')
 class TestRandomAccessTorchDataset(unittest.TestCase):
@@ -152,8 +174,7 @@ class TestGeneratorTorchDataset(unittest.TestCase):
     'PyTorch or tomosipo or ASTRA+CUDA not available')
 class TestTorchRayTrafoParallel2DModule(unittest.TestCase):
     def test(self):
-        dataset = get_standard_dataset('ellipses', fixed_seeds=True,
-                                       impl='astra_cuda')
+        dataset = get_parallel_beam_dataset()
         ray_trafo = dataset.get_ray_trafo(impl='astra_cuda')
         module = TorchRayTrafoParallel2DModule(ray_trafo)
         for batch_size, channels in [(1, 3),
@@ -167,48 +188,35 @@ class TestTorchRayTrafoParallel2DModule(unittest.TestCase):
             for i, odl_in in enumerate(test_data.ground_truth):
                 odl_out = ray_trafo(odl_in)
                 self.assertTrue(np.allclose(
-                    torch_out[i].detach().cpu().numpy(), odl_out, rtol=1.e-2))
+                    torch_out[i].detach().cpu().numpy(), odl_out, rtol=1e-2))
 
     def testGradient(self):
-        dataset = get_standard_dataset('ellipses', fixed_seeds=True,
-                                       impl='astra_cuda')
+        torch.manual_seed(1)
+        dataset = get_parallel_beam_dataset()
         ray_trafo = dataset.get_ray_trafo(impl='astra_cuda')
         module = TorchRayTrafoParallel2DModule(ray_trafo)
         batch_size, channels = 2, 3
-        torch_in_ = torch.ones(
-            (batch_size * channels,) + dataset.shape[1],
-            requires_grad=True)
-        torch_in = torch_in_.view(batch_size, channels, *dataset.shape[1])
-        torch_out = module(torch_in).view(-1, *dataset.shape[0])
-        for i in range(batch_size * channels):
-            for j in range(0, dataset.shape[0][0], 3):  # angle
-                for k in range(0, dataset.shape[0][1], 12):  # detector pos
-                    odl_value_in = np.zeros(dataset.shape[0])
-                    odl_value_in[j, k] = 1.
-                    odl_grad = ray_trafo.adjoint(odl_value_in)
-                    torch_in_.grad = None
-                    torch_out[i, j, k].backward(retain_graph=True)
-                    torch_grad_np = (
-                        torch_in_.grad[i].detach().cpu().numpy())
-                    # very rough check for maximum error
-                    self.assertTrue(np.allclose(torch_grad_np, odl_grad,
-                        rtol=1.))
-                    non_zero = np.nonzero(np.asarray(odl_grad))
-                    if np.any(odl_grad):  # there seem to be cases where
-                                          # a pixel has no influence on the
-                                          # gradient
-                        # tighter check for mean error
-                        self.assertLess(np.mean(np.abs(
-                            torch_grad_np[non_zero] - odl_grad[non_zero])
-                            / np.abs(odl_grad[non_zero])), 1e-3)
+        for _ in range(5):
+            torch_in = torch.rand(
+                (batch_size, channels) + dataset.shape[1],
+                requires_grad=True)
+            torch_out = module(torch_in)
+            out_grad = torch.rand(batch_size, channels, *dataset.shape[0])
+            torch_in.grad = None
+            torch_out.backward(out_grad, retain_graph=True)
+            scalar_prod_range = torch.sum(torch_out * out_grad).item()
+            scalar_prod_domain = torch.sum(torch_in * torch_in.grad).item()
+            self.assertAlmostEqual(
+                scalar_prod_range,
+                scalar_prod_domain,
+                delta=1e-4*np.mean([scalar_prod_range, scalar_prod_domain]))
 
 @unittest.skipUnless(
     TORCH_AVAILABLE and TOMOSIPO_AVAILABLE and ASTRA_CUDA_AVAILABLE,
     'PyTorch or tomosipo or ASTRA+CUDA not available')
 class TestTorchRayTrafoParallel2DAdjointModule(unittest.TestCase):
     def test(self):
-        dataset = get_standard_dataset('ellipses', fixed_seeds=True,
-                                       impl='astra_cuda')
+        dataset = get_parallel_beam_dataset()
         ray_trafo = dataset.get_ray_trafo(impl='astra_cuda')
         module = TorchRayTrafoParallel2DAdjointModule(ray_trafo)
         for batch_size, channels in [(1, 3),
@@ -222,54 +230,28 @@ class TestTorchRayTrafoParallel2DAdjointModule(unittest.TestCase):
             for i, odl_in in enumerate(test_data.observations):
                 odl_out = ray_trafo.adjoint(odl_in)
                 self.assertTrue(np.allclose(
-                    torch_out[i].detach().cpu().numpy(), odl_out, rtol=1.e-4))
+                    torch_out[i].detach().cpu().numpy(), odl_out, rtol=1e-4))
 
     def testGradient(self):
-        dataset = get_standard_dataset('ellipses', fixed_seeds=True,
-                                       impl='astra_cuda')
+        torch.manual_seed(1)
+        dataset = get_parallel_beam_dataset()
         ray_trafo = dataset.get_ray_trafo(impl='astra_cuda')
         module = TorchRayTrafoParallel2DAdjointModule(ray_trafo)
-        batch_size, channels = 2, 2
-        torch_in_ = torch.ones(
-            (batch_size * channels,) + dataset.shape[0],
-            requires_grad=True)
-        torch_in = torch_in_.view(batch_size, channels, *dataset.shape[0])
-        torch_out = module(torch_in).view(-1, *dataset.shape[1])
-        for i in range(batch_size * channels):
-            for j in range(0, dataset.shape[1][0], 9):  # x
-                for k in range(0, dataset.shape[1][1], 9):  # y
-                    odl_value_in = np.zeros(dataset.shape[1])
-                    odl_value_in[j, k] = 1.
-                    odl_grad = ray_trafo.adjoint.adjoint(odl_value_in)
-                    torch_in_.grad = None
-                    torch_out[i, j, k].backward(retain_graph=True)
-                    torch_grad_np = (
-                        torch_in_.grad[i].detach().cpu().numpy())
-                    # very rough check for maximum error
-                    self.assertTrue(np.allclose(torch_grad_np, odl_grad,
-                        rtol=1.))
-                    non_zero = np.nonzero(np.asarray(odl_grad))
-                    if np.any(odl_grad):  # there seem to be cases where
-                                          # a pixel has no influence on the
-                                          # gradient
-                        # tighter check for mean error
-                        self.assertLess(np.mean(np.abs(
-                            torch_grad_np[non_zero] - odl_grad[non_zero])
-                            / np.abs(odl_grad[non_zero])), 1e-2)
-
-@unittest.skipUnless(
-    TORCH_AVAILABLE and TOMOSIPO_AVAILABLE and ASTRA_CUDA_AVAILABLE,
-    'PyTorch or tomosipo or ASTRA+CUDA not available')
-class TestGetTorchRayTrafoParallel2d(unittest.TestCase):
-    def test(self):
-        pass
-
-@unittest.skipUnless(
-    TORCH_AVAILABLE and TOMOSIPO_AVAILABLE and ASTRA_CUDA_AVAILABLE,
-    'PyTorch or tomosipo or ASTRA+CUDA not available')
-class TestGetTorchRayTrafoParallel2dAdjoint(unittest.TestCase):
-    def test(self):
-        pass
+        batch_size, channels = 2, 3
+        for _ in range(5):
+            torch_in = torch.rand(
+                (batch_size, channels) + dataset.shape[0],
+                requires_grad=True)
+            torch_out = module(torch_in)
+            out_grad = torch.rand(batch_size, channels, *dataset.shape[1])
+            torch_in.grad = None
+            torch_out.backward(out_grad, retain_graph=True)
+            scalar_prod_range = torch.sum(torch_out * out_grad).item()
+            scalar_prod_domain = torch.sum(torch_in * torch_in.grad).item()
+            self.assertAlmostEqual(
+                scalar_prod_range,
+                scalar_prod_domain,
+                delta=1e-4*np.mean([scalar_prod_range, scalar_prod_domain]))
 
 @unittest.skipUnless(TORCH_AVAILABLE, 'PyTorch not available')
 class TestLoadStateDictConvertDataParallel(unittest.TestCase):
