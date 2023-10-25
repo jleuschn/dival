@@ -43,11 +43,14 @@ def download_file(url, filename=None, chunk_size=1024, verbose=False,
     else:
         local_filename = filename
     r = requests.get(url, stream=True)
-    file_size = int(r.headers['Content-Length'])
-    chunk = 1
-    num_chunks = ceil(file_size / chunk_size)
-    if verbose:
-        print("downloading {:d} bytes".format(file_size))
+    if r.headers.get('Transfer-Encoding', 'identity') == 'chunked':
+        num_chunks = None
+        print("downloading")
+    else:
+        file_size = int(r.headers['Content-Length'])
+        num_chunks = ceil(file_size / chunk_size)
+        if verbose:
+            print("downloading {:d} bytes".format(file_size))
 
     if md5sum:
         hash_md5 = hashlib.md5()
