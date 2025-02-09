@@ -40,10 +40,10 @@ def download_zenodo_record(record_id, base_path='', md5sum_check=True,
     files = r.json()['files']
     success = True
     for i, f in enumerate(files):
-        url = f['links']['download']
-        filename = f['filename']
+        url = f['links']['self']
+        filename = f['key']
         path = os.path.join(base_path, filename)
-        size = f['filesize']
+        size = f['size']
         size_kb = size / 1000
         checksum = f['checksum']
         try:
@@ -56,7 +56,7 @@ def download_zenodo_record(record_id, base_path='', md5sum_check=True,
                       "size. Will check md5 sum now.".format(
                           i+1, len(files), filename, size_kb))
                 md5sum_existing = compute_md5sum(path)
-                md5sum_matches = (md5sum_existing == checksum)
+                md5sum_matches = ("md5:" + md5sum_existing == checksum)
                 if md5sum_matches:
                     print("skipping file {}, md5 checksum matches".format(
                         filename))
@@ -83,7 +83,7 @@ def download_zenodo_record(record_id, base_path='', md5sum_check=True,
             md5sum_matches = False
             while retry and not md5sum_matches:
                 md5sum = download_file(url, path, md5sum=True)
-                md5sum_matches = (md5sum == checksum)
+                md5sum_matches = ("md5:" + md5sum == checksum)
                 if not md5sum_matches:
                     print("md5 checksum does not match for file '{}'. Retry "
                           "downloading? (y)/n".format(filename))

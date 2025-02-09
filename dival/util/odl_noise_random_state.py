@@ -19,7 +19,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 import odl
 from packaging import version
-if version.parse(odl.__version__) < version.parse('1.0.0.dev0'):
+if version.parse(odl.__version__) < version.parse('0.8.0'):
     from odl.util import NumpyRandomSeed as npy_random_seed
 else:
     from odl.util import npy_random_seed

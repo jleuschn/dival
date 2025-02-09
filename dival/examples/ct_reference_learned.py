@@ -20,10 +20,10 @@ test_data = dataset.get_data_pairs('test', 100)
 # %% task table and reconstructors
 eval_tt = TaskTable()
 
-fbpunet_reconstructor = get_reference_reconstructor('fbpunet', 'lodopab')
-iradonmap_reconstructor = get_reference_reconstructor('iradonmap', 'lodopab')
-learnedgd_reconstructor = get_reference_reconstructor('learnedgd', 'lodopab')
-learnedpd_reconstructor = get_reference_reconstructor('learnedpd', 'lodopab')
+fbpunet_reconstructor = get_reference_reconstructor('fbpunet', 'lodopab', impl=IMPL)
+iradonmap_reconstructor = get_reference_reconstructor('iradonmap', 'lodopab', impl=IMPL)
+learnedgd_reconstructor = get_reference_reconstructor('learnedgd', 'lodopab', impl=IMPL)
+learnedpd_reconstructor = get_reference_reconstructor('learnedpd', 'lodopab', impl=IMPL)
 
 reconstructors = [fbpunet_reconstructor,  iradonmap_reconstructor,
                   learnedgd_reconstructor, learnedpd_reconstructor]

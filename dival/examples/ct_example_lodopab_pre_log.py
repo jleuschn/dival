@@ -5,9 +5,11 @@ from dival.reconstructors.odl_reconstructors import FBPReconstructor
 from dival.datasets.standard import get_standard_dataset
 from dival.util.constants import MU_MAX
 
+IMPL = 'astra_cpu'
+
 # %% data
-dataset = get_standard_dataset('lodopab', observation_model='pre-log')
-ray_trafo = dataset.get_ray_trafo(impl='astra_cpu')
+dataset = get_standard_dataset('lodopab', observation_model='pre-log', impl=IMPL)
+ray_trafo = dataset.get_ray_trafo(impl=IMPL)
 reco_space = ray_trafo.domain
 test_data = dataset.get_data_pairs('test', 10)
 
