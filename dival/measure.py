@@ -268,6 +268,7 @@ class SSIMMeasure(Measure):
         super().__init__(short_name=short_name)
 
     def apply(self, reconstruction, ground_truth):
+        reconstruction = np.asarray(reconstruction)
         gt = np.asarray(ground_truth)
         data_range = (self.data_range if self.data_range is not None
                       else np.max(gt) - np.min(gt))

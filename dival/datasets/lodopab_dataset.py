@@ -663,7 +663,7 @@ class LoDoPaBDataset(Dataset):
             ids[part] = np.loadtxt(
                 os.path.join(DATA_PATH,
                              'patient_ids_rand_{}.csv'.format(part)),
-                dtype=np.int)
+                dtype=int)
             if relative:
                 ids[part] = LoDoPaBDataset._abs_to_rel_patient_id(ids[part],
                                                                   part)
