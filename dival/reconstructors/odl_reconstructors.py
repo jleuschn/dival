@@ -90,7 +90,24 @@ class FBPReconstructor(Reconstructor):
             out[:] = self.post_processor(out)
 
 
-class CGReconstructor(IterativeReconstructor):
+class _IterativeODLReconstructor(IterativeReconstructor):
+    def __init__(self, *args, niter=None, hyper_params=None, **kwargs):
+        if niter is not None:
+            # override "iterations" hyper-parameter
+            hyper_params = {} if hyper_params is None else hyper_params
+            hyper_params["iterations"] = niter
+        super().__init__(*args, hyper_params=hyper_params, **kwargs)
+
+    @property
+    def niter(self):
+        return self.hyper_params["iterations"]
+
+    @niter.setter
+    def niter(self, value):
+        self.hyper_params["iterations"] = value
+
+
+class CGReconstructor(_IterativeODLReconstructor):
     """Iterative reconstructor applying the conjugate gradient method.
 
     Attributes
@@ -108,7 +125,7 @@ class CGReconstructor(IterativeReconstructor):
         `op` is assumed to be self-adjoint and the system of equations is
         solved directly.
     """
-    def __init__(self, op, x0, niter, callback=None, op_is_symmetric=False,
+    def __init__(self, op, x0, niter=None, callback=None, op_is_symmetric=False,
                  **kwargs):
         """
         Calls `odl.solvers.iterative.iterative.conjugate_gradient_normal` (if
@@ -127,7 +144,8 @@ class CGReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Number of iterations.
+            Number of iterations (overriding ``self.hyper_params["iterations"]``
+            initially).
         callback : :class:`odl.solvers.util.callback.Callback`, optional
             Object that is called in each iteration.
         op_is_symmetric : bool, optional
@@ -137,11 +155,10 @@ class CGReconstructor(IterativeReconstructor):
         """
         self.op = op
         self.x0 = x0
-        self.niter = niter
         self.op_is_symmetric = op_is_symmetric
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -160,7 +177,7 @@ class CGReconstructor(IterativeReconstructor):
         return out
 
 
-class GaussNewtonReconstructor(IterativeReconstructor):
+class GaussNewtonReconstructor(_IterativeODLReconstructor):
     """Iterative reconstructor applying the Gauss-Newton method.
 
     Attributes
@@ -176,7 +193,7 @@ class GaussNewtonReconstructor(IterativeReconstructor):
     callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     """
-    def __init__(self, op, x0, niter, zero_seq_gen=None, callback=None,
+    def __init__(self, op, x0, niter=None, zero_seq_gen=None, callback=None,
                  **kwargs):
         """
         Calls `odl.solvers.iterative.iterative.gauss_newton`.
@@ -189,7 +206,8 @@ class GaussNewtonReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Maximum number of iterations.
+            Maximum number of iterations (overriding
+            ``self.hyper_params["iterations"]`` initially).
         zero_seq_gen : generator, optional
             Zero sequence generator used for regularization.
             Default: generator yielding 2^(-i).
@@ -198,11 +216,10 @@ class GaussNewtonReconstructor(IterativeReconstructor):
         """
         self.op = op
         self.x0 = x0
-        self.niter = niter
         self.zero_seq_gen = zero_seq_gen
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -219,7 +236,7 @@ class GaussNewtonReconstructor(IterativeReconstructor):
         return out
 
 
-class KaczmarzReconstructor(IterativeReconstructor):
+class KaczmarzReconstructor(_IterativeODLReconstructor):
     """Iterative reconstructor applying Kaczmarz's method.
 
     Attributes
@@ -242,7 +259,7 @@ class KaczmarzReconstructor(IterativeReconstructor):
     callback_loop : {'inner', 'outer'}
         Whether the `callback` should be called in the inner or outer loop.
     """
-    def __init__(self, ops, x0, niter, omega=1, random=False, projection=None,
+    def __init__(self, ops, x0, niter=None, omega=1, random=False, projection=None,
                  callback=None, callback_loop='outer', **kwargs):
         """
         Calls `odl.solvers.iterative.iterative.kaczmarz`.
@@ -255,7 +272,8 @@ class KaczmarzReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Number of iterations.
+            Number of iterations (overriding ``self.hyper_params["iterations"]``
+            initially).
         omega : positive float or sequence of positive floats, optional
             Relaxation parameter.
             If a single float is given it is used for all operators.
@@ -270,7 +288,6 @@ class KaczmarzReconstructor(IterativeReconstructor):
         """
         self.ops = ops
         self.x0 = x0
-        self.niter = niter
         self.omega = omega
         self.projection = projection
         self.random = random
@@ -278,7 +295,7 @@ class KaczmarzReconstructor(IterativeReconstructor):
         super().__init__(
             reco_space=self.ops[0].domain,
             observation_space=ProductSpace(*(op.range for op in self.ops)),
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -294,7 +311,7 @@ class KaczmarzReconstructor(IterativeReconstructor):
         return out
 
 
-class LandweberReconstructor(IterativeReconstructor):
+class LandweberReconstructor(_IterativeODLReconstructor):
     """Iterative reconstructor applying Landweber's method.
 
     Attributes
@@ -312,7 +329,7 @@ class LandweberReconstructor(IterativeReconstructor):
     callback : :class:`odl.solvers.util.callback.Callback` or `None`
         Object that is called in each iteration.
     """
-    def __init__(self, op, x0, niter, omega=None, projection=None,
+    def __init__(self, op, x0, niter=None, omega=None, projection=None,
                  callback=None, **kwargs):
         """
         Calls `odl.solvers.iterative.iterative.landweber`.
@@ -325,7 +342,8 @@ class LandweberReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Number of iterations.
+            Number of iterations (overriding ``self.hyper_params["iterations"]``
+            initially).
         omega : positive float, optional
             Relaxation parameter.
         projection : callable, optional
@@ -336,12 +354,11 @@ class LandweberReconstructor(IterativeReconstructor):
         """
         self.op = op
         self.x0 = x0
-        self.niter = niter
         self.omega = omega
         self.projection = projection
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -356,7 +373,7 @@ class LandweberReconstructor(IterativeReconstructor):
         return out
 
 
-class MLEMReconstructor(IterativeReconstructor):
+class MLEMReconstructor(_IterativeODLReconstructor):
     """Iterative reconstructor applying Maximum Likelihood Expectation
     Maximization.
 
@@ -379,7 +396,7 @@ class MLEMReconstructor(IterativeReconstructor):
         term, if this parameter is given, it is replaced by it.
         Default: ``op[i].adjoint(op[i].range.one())``
     """
-    def __init__(self, op, x0, niter, noise='poisson', callback=None,
+    def __init__(self, op, x0, niter=None, noise='poisson', callback=None,
                  sensitivities=None, **kwargs):
         """
         Calls `odl.solvers.iterative.statistical.osmlem`.
@@ -392,7 +409,8 @@ class MLEMReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Number of iterations.
+            Number of iterations (overriding ``self.hyper_params["iterations"]``
+            initially).
         noise : {'poisson'}, optional
             Noise model determining the variant of MLEM.
             For ``'poisson'``, the initial value of ``x`` should be
@@ -407,14 +425,13 @@ class MLEMReconstructor(IterativeReconstructor):
         self.os_mode = not isinstance(op, Operator)
         self.op = op if self.os_mode else [op]
         self.x0 = x0
-        self.niter = niter
         self.noise = noise
         self.sensitivities = sensitivities
         observation_space = (ProductSpace(*(op.range for op in self.op)) if
                              self.os_mode else self.op[0].range)
         super().__init__(
             reco_space=self.op[0].domain, observation_space=observation_space,
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         out_ = out
@@ -432,7 +449,7 @@ class MLEMReconstructor(IterativeReconstructor):
         return out
 
 
-class ISTAReconstructor(IterativeReconstructor):
+class ISTAReconstructor(_IterativeODLReconstructor):
     """Iterative reconstructor applying proximal gradient
     algorithm for convex optimization, also known as
     Iterative Soft-Thresholding Algorithm (ISTA).
@@ -462,7 +479,7 @@ class ISTAReconstructor(IterativeReconstructor):
         Object that is called in each iteration.
     """
 
-    def __init__(self, op, x0, niter, gamma=0.001, reg=L1Norm,
+    def __init__(self, op, x0, niter=None, gamma=0.001, reg=L1Norm,
                  accelerated=True,  lam=1., callback=None, **kwargs):
         """
         Calls
@@ -477,7 +494,8 @@ class ISTAReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Number of iterations.
+            Number of iterations (overriding ``self.hyper_params["iterations"]``
+            initially).
         gamma : positive float, optional
             Step size parameter (default ``0.001``).
         reg : [type of ] `odl.solvers.functional.Functional`, optional
@@ -498,7 +516,6 @@ class ISTAReconstructor(IterativeReconstructor):
         """
         self.op = op
         self.x0 = x0
-        self.niter = niter
         self.gamma = gamma
         if isinstance(reg, Functional):
             self.reg = reg
@@ -512,7 +529,7 @@ class ISTAReconstructor(IterativeReconstructor):
         self.callback = callback
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         # The proximal_gradient and accelerated_proximal_gradient methods
@@ -541,7 +558,7 @@ class ISTAReconstructor(IterativeReconstructor):
         return out
 
 
-class PDHGReconstructor(IterativeReconstructor):
+class PDHGReconstructor(_IterativeODLReconstructor):
     """Primal-Dual Hybrid Gradient (PDHG) algorithm from the 2011 paper
     https://link.springer.com/article/10.1007/s10851-010-0251-1 with TV
     regularization.
@@ -560,7 +577,7 @@ class PDHGReconstructor(IterativeReconstructor):
         Object that is called in each iteration.
     """
 
-    def __init__(self, op, x0, niter, lam=0.01, callback=None, **kwargs):
+    def __init__(self, op, x0, niter=None, lam=0.01, callback=None, **kwargs):
         """
         Calls `odl.solvers.nonsmooth.primal_dual_hybrid_gradient.pdhg`.
 
@@ -571,7 +588,8 @@ class PDHGReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Number of iterations.
+            Number of iterations (overriding ``self.hyper_params["iterations"]``
+            initially).
         lam : positive float, optional
             TV-regularization rate (default ``0.01``).
         callback : :class:`odl.solvers.util.callback.Callback` or `None`
@@ -579,12 +597,11 @@ class PDHGReconstructor(IterativeReconstructor):
         """
         self.op = op
         self.x0 = x0
-        self.niter = niter
         self.lam = lam
         self.callback = callback
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -606,7 +623,7 @@ class PDHGReconstructor(IterativeReconstructor):
         return out
 
 
-class DouglasRachfordReconstructor(IterativeReconstructor):
+class DouglasRachfordReconstructor(_IterativeODLReconstructor):
     """Douglas-Rachford primal-dual splitting algorithm from the 2012 paper
     https://arxiv.org/abs/1212.0326 with TV regularization.
 
@@ -624,7 +641,7 @@ class DouglasRachfordReconstructor(IterativeReconstructor):
         Object that is called in each iteration.
     """
 
-    def __init__(self, op, x0, niter, lam=0.01, callback=None, **kwargs):
+    def __init__(self, op, x0, niter=None, lam=0.01, callback=None, **kwargs):
         """
         Calls `odl.solvers.nonsmooth.douglas_rachford.douglas_rachford_pd`.
 
@@ -635,7 +652,8 @@ class DouglasRachfordReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Number of iterations.
+            Number of iterations (overriding ``self.hyper_params["iterations"]``
+            initially).
         lam : positive float, optional
             TV-regularization rate (default ``0.01``).
         callback : :class:`odl.solvers.util.callback.Callback` or `None`
@@ -643,12 +661,11 @@ class DouglasRachfordReconstructor(IterativeReconstructor):
         """
         self.op = op
         self.x0 = x0
-        self.niter = niter
         self.lam = lam
         self.callback = callback
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -670,7 +687,7 @@ class DouglasRachfordReconstructor(IterativeReconstructor):
         return out
 
 
-class ForwardBackwardReconstructor(IterativeReconstructor):
+class ForwardBackwardReconstructor(_IterativeODLReconstructor):
     """ The forward-backward primal-dual splitting algorithm.
 
     Attributes
@@ -689,7 +706,7 @@ class ForwardBackwardReconstructor(IterativeReconstructor):
         Object that is called in each iteration.
     """
 
-    def __init__(self, op, x0, niter, lam=0.01, tau=0.01, callback=None,
+    def __init__(self, op, x0, niter=None, lam=0.01, tau=0.01, callback=None,
                  **kwargs):
         """
         Calls `odl.solvers.forward_backward_pd`.
@@ -701,7 +718,8 @@ class ForwardBackwardReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Number of iterations.
+            Number of iterations (overriding ``self.hyper_params["iterations"]``
+            initially).
         lam : positive float, optional
             TV-regularization rate (default ``0.01``).
         tau : positive float, optional
@@ -711,13 +729,12 @@ class ForwardBackwardReconstructor(IterativeReconstructor):
         """
         self.op = op
         self.x0 = x0
-        self.niter = niter
         self.lam = lam
         self.tau = tau
         self.callback = callback
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -744,7 +761,7 @@ class ForwardBackwardReconstructor(IterativeReconstructor):
         return out
 
 
-class ADMMReconstructor(IterativeReconstructor):
+class ADMMReconstructor(_IterativeODLReconstructor):
     """ Generic linearized ADMM method for convex problems. ADMM stands for
     'Alternating Direction Method of Multipliers'.
 
@@ -764,7 +781,7 @@ class ADMMReconstructor(IterativeReconstructor):
         Object that is called in each iteration.
     """
 
-    def __init__(self, op, x0, niter, lam=0.01, tau=0.01, callback=None,
+    def __init__(self, op, x0, niter=None, lam=0.01, tau=0.01, callback=None,
                  **kwargs):
         """
         Calls `odl.solvers.nonsmooth.admm.admm_linearized`.
@@ -776,7 +793,8 @@ class ADMMReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Number of iterations.
+            Number of iterations (overriding ``self.hyper_params["iterations"]``
+            initially).
         lam : positive float, optional
             TV-regularization weight (default ``0.01``).
         tau : positive float, optional
@@ -786,13 +804,12 @@ class ADMMReconstructor(IterativeReconstructor):
         """
         self.op = op
         self.x0 = x0
-        self.niter = niter
         self.lam = lam
         self.tau = tau
         self.callback = callback
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
@@ -815,7 +832,7 @@ class ADMMReconstructor(IterativeReconstructor):
         return out
 
 
-class BFGSReconstructor(IterativeReconstructor):
+class BFGSReconstructor(_IterativeODLReconstructor):
     """ Quasi-Newton BFGS method to minimize a differentiable function. The
     TV regularization term is smoothed using the Moreau envelope.
 
@@ -833,7 +850,7 @@ class BFGSReconstructor(IterativeReconstructor):
         Object that is called in each iteration.
     """
 
-    def __init__(self, op, x0, niter, lam=0.01, callback=None, **kwargs):
+    def __init__(self, op, x0, niter=None, lam=0.01, callback=None, **kwargs):
         """
         Calls `odl.solvers.smooth.newton.bfgs_method`.
 
@@ -844,7 +861,8 @@ class BFGSReconstructor(IterativeReconstructor):
         x0 : ``op.domain`` element
             Initial value.
         niter : int
-            Number of iterations.
+            Number of iterations (overriding ``self.hyper_params["iterations"]``
+            initially).
         lam : positive float, optional
             TV-regularization weight (default ``0.01``).
         callback : :class:`odl.solvers.util.callback.Callback` or `None`
@@ -852,12 +870,11 @@ class BFGSReconstructor(IterativeReconstructor):
         """
         self.op = op
         self.x0 = x0
-        self.niter = niter
         self.lam = lam
         self.callback = callback
         super().__init__(
             reco_space=self.op.domain, observation_space=self.op.range,
-            callback=callback, **kwargs)
+            niter=niter, callback=callback, **kwargs)
 
     def _reconstruct(self, observation, out):
         observation = self.observation_space.element(observation)
